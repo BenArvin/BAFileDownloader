@@ -15,6 +15,13 @@
 		259143A81FD00B7A0061FDF1 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 259143A71FD00B7A0061FDF1 /* main.m */; };
 		259143B21FD00B7A0061FDF1 /* BAFileDownloaderTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 259143B11FD00B7A0061FDF1 /* BAFileDownloaderTests.m */; };
 		259143BD1FD00B7A0061FDF1 /* BAFileDownloaderUITests.m in Sources */ = {isa = PBXBuildFile; fileRef = 259143BC1FD00B7A0061FDF1 /* BAFileDownloaderUITests.m */; };
+		259143D11FD00C720061FDF1 /* BAFileDownloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 259143D01FD00C720061FDF1 /* BAFileDownloader.m */; };
+		259143D41FD00EA70061FDF1 /* BAFileDownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = 259143D31FD00EA70061FDF1 /* BAFileDownloadTask.m */; };
+		25946AF11FD7D61C00820BF4 /* BAFileDownloaderSession.m in Sources */ = {isa = PBXBuildFile; fileRef = 25946AF01FD7D61C00820BF4 /* BAFileDownloaderSession.m */; };
+		2598C9B71FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m in Sources */ = {isa = PBXBuildFile; fileRef = 2598C9B61FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m */; };
+		2598C9BA1FD13A8A00B16D77 /* BAFileDownloadOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = 2598C9B91FD13A8A00B16D77 /* BAFileDownloadOperation.m */; };
+		2598C9BD1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m in Sources */ = {isa = PBXBuildFile; fileRef = 2598C9BC1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m */; };
+		25B773601FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m in Sources */ = {isa = PBXBuildFile; fileRef = 25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +58,21 @@
 		259143B81FD00B7A0061FDF1 /* BAFileDownloaderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BAFileDownloaderUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		259143BC1FD00B7A0061FDF1 /* BAFileDownloaderUITests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloaderUITests.m; sourceTree = "<group>"; };
 		259143BE1FD00B7A0061FDF1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		259143CE1FD00C5C0061FDF1 /* BAFileDownloaderKit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloaderKit.h; sourceTree = "<group>"; };
+		259143CF1FD00C6A0061FDF1 /* BAFileDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloader.h; sourceTree = "<group>"; };
+		259143D01FD00C720061FDF1 /* BAFileDownloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloader.m; sourceTree = "<group>"; };
+		259143D21FD00E9A0061FDF1 /* BAFileDownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloadTask.h; sourceTree = "<group>"; };
+		259143D31FD00EA70061FDF1 /* BAFileDownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloadTask.m; sourceTree = "<group>"; };
+		25946AEF1FD7D61300820BF4 /* BAFileDownloaderSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloaderSession.h; sourceTree = "<group>"; };
+		25946AF01FD7D61C00820BF4 /* BAFileDownloaderSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloaderSession.m; sourceTree = "<group>"; };
+		2598C9B51FD1335400B16D77 /* NSString+BAFileDownloaderCategory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSString+BAFileDownloaderCategory.h"; sourceTree = "<group>"; };
+		2598C9B61FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSString+BAFileDownloaderCategory.m"; sourceTree = "<group>"; };
+		2598C9B81FD13A8000B16D77 /* BAFileDownloadOperation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloadOperation.h; sourceTree = "<group>"; };
+		2598C9B91FD13A8A00B16D77 /* BAFileDownloadOperation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloadOperation.m; sourceTree = "<group>"; };
+		2598C9BB1FD13B6300B16D77 /* BAFileDownloaderLocalCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloaderLocalCache.h; sourceTree = "<group>"; };
+		2598C9BC1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloaderLocalCache.m; sourceTree = "<group>"; };
+		25B7735E1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSError+BAFileDownloaderCategory.h"; sourceTree = "<group>"; };
+		25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSError+BAFileDownloaderCategory.m"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +127,7 @@
 				259143991FD00B7A0061FDF1 /* AppDelegate.m */,
 				2591439B1FD00B7A0061FDF1 /* ViewController.h */,
 				2591439C1FD00B7A0061FDF1 /* ViewController.m */,
+				259143CD1FD00C390061FDF1 /* BAFileDownloaderKit */,
 				2591439E1FD00B7A0061FDF1 /* Main.storyboard */,
 				259143A11FD00B7A0061FDF1 /* Assets.xcassets */,
 				259143A31FD00B7A0061FDF1 /* LaunchScreen.storyboard */,
@@ -130,6 +153,28 @@
 				259143BE1FD00B7A0061FDF1 /* Info.plist */,
 			);
 			path = BAFileDownloaderUITests;
+			sourceTree = "<group>";
+		};
+		259143CD1FD00C390061FDF1 /* BAFileDownloaderKit */ = {
+			isa = PBXGroup;
+			children = (
+				259143CE1FD00C5C0061FDF1 /* BAFileDownloaderKit.h */,
+				259143D21FD00E9A0061FDF1 /* BAFileDownloadTask.h */,
+				259143D31FD00EA70061FDF1 /* BAFileDownloadTask.m */,
+				259143CF1FD00C6A0061FDF1 /* BAFileDownloader.h */,
+				259143D01FD00C720061FDF1 /* BAFileDownloader.m */,
+				2598C9B81FD13A8000B16D77 /* BAFileDownloadOperation.h */,
+				2598C9B91FD13A8A00B16D77 /* BAFileDownloadOperation.m */,
+				2598C9BB1FD13B6300B16D77 /* BAFileDownloaderLocalCache.h */,
+				2598C9BC1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m */,
+				25946AEF1FD7D61300820BF4 /* BAFileDownloaderSession.h */,
+				25946AF01FD7D61C00820BF4 /* BAFileDownloaderSession.m */,
+				2598C9B51FD1335400B16D77 /* NSString+BAFileDownloaderCategory.h */,
+				2598C9B61FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m */,
+				25B7735E1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.h */,
+				25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */,
+			);
+			path = BAFileDownloaderKit;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -266,8 +311,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				2591439D1FD00B7A0061FDF1 /* ViewController.m in Sources */,
+				2598C9B71FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m in Sources */,
+				25946AF11FD7D61C00820BF4 /* BAFileDownloaderSession.m in Sources */,
+				2598C9BA1FD13A8A00B16D77 /* BAFileDownloadOperation.m in Sources */,
 				259143A81FD00B7A0061FDF1 /* main.m in Sources */,
+				259143D41FD00EA70061FDF1 /* BAFileDownloadTask.m in Sources */,
+				2598C9BD1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m in Sources */,
 				2591439A1FD00B7A0061FDF1 /* AppDelegate.m in Sources */,
+				259143D11FD00C720061FDF1 /* BAFileDownloader.m in Sources */,
+				25B773601FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

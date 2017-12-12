@@ -7,6 +7,7 @@
 //
 
 #import "ViewController.h"
+#import "BAFileDownloaderKit.h"
 
 @interface ViewController ()
 
@@ -23,6 +24,18 @@
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    BAFileDownloadTask *task = [[BAFileDownloadTask alloc] init];
+//    task.URL = @"https://codeload.github.com/mpv-player/mpv/zip/master";
+    task.URL = @"http://zkres.myzaker.com/img_upload/editor/article_video/2016/10/27/14775491454394.mp4";
+    task.inFragmentMode = YES;
+    
+    [BAFileDownloader addTask:task];
+    [BAFileDownloader startTasksWithURL:task.URL];
 }
 
 
