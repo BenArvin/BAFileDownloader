@@ -19,11 +19,11 @@ typedef NS_ENUM(NSUInteger, BAFileDownloaderLocalCacheState) {
 - (instancetype)initWithURL:(NSString *)URL;
 
 - (BAFileDownloaderLocalCacheState)state;
-- (void)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize finishedBlock:(void(^)(void))finishedBlock;
+- (void)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize finishedBlock:(void(^)(NSError *error))finishedBlock;
 
 - (void)getUncachedSliceRanges:(void(^)(NSArray *sliceRanges))finishedBlock;
 - (void)getFailedSliceRanges:(void(^)(NSArray *sliceRanges))finishedBlock;
-- (void)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange finishedBlock:(void(^)(void))finishedBlock;
+- (void)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange finishedBlock:(void(^)(NSError *error))finishedBlock;
 
 - (NSString *)fullDataPath;
 

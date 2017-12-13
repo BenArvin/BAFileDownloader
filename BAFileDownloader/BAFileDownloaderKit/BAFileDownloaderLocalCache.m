@@ -9,6 +9,8 @@
 #import "BAFileDownloaderLocalCache.h"
 #import "NSString+BAFileDownloaderCategory.h"
 #import <CoreGraphics/CoreGraphics.h>
+#import "BAStreamFileMerger.h"
+#import "NSError+BAFileDownloaderCategory.h"
 
 typedef NS_ENUM(NSUInteger, BAFileLocalCacheSliceState) {
     BAFileLocalCacheSliceStateNull = 0,
@@ -107,8 +109,6 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
         [self createDirectoryAtPath:[self cacheFolderPath]];
         [self createDirectoryAtPath:[self slicesPoolPath]];
         [self createDirectoryAtPath:[self tmpFilePoolPath]];
-        
-        NSLog(@"---- cache path for URL(%@): %@", _URL, [self cacheFolderPath]);
     }
     return self;
 }
@@ -117,10 +117,10 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
 
 - (BAFileDownloaderLocalCacheState)state
 {
-    return 0;
+    return [self cacheInfo].state;
 }
 
-- (void)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize finishedBlock:(void(^)(void))finishedBlock
+- (void)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize finishedBlock:(void(^)(NSError *error))finishedBlock
 {
     __weak typeof(self) weakSelf = self;
     [self.queue addOperationWithBlock:^{
@@ -143,7 +143,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
         [strongSelf updateCacheInfo:cacheInfo];
         if (finishedBlock) {
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                finishedBlock();
+                finishedBlock(nil);
             });
         }
     }];
@@ -195,8 +195,9 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
     }];
 }
 
-- (void)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange finishedBlock:(void(^)(void))finishedBlock
+- (void)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange finishedBlock:(void(^)(NSError *error))finishedBlock
 {
+    //1.copy tmp file from NSURLSession path to sand box path synchronized, in case tmp file deleted
     NSString *rangeString = NSStringFromRange(sliceRange);
     NSString *tmpFilePath = [self tmpSliceFilePathWithSliceFlag:rangeString];
     if (!error) {
@@ -205,39 +206,61 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
     __weak typeof(self) weakSelf = self;
     [self.queue addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
+        
+        void(^finishedActionBlock)(NSError *) = ^(NSError *error){
+            if (finishedBlock) {
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
+                    finishedBlock(error);
+                });
+            }
+        };
+        
+        //2.start save action
         if (error) {
             BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
             [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateError) forKey:NSStringFromRange(sliceRange)];
             [strongSelf updateCacheInfo:cacheInfo];
+            finishedActionBlock(error);
         } else {
             if ([strongSelf isPathExist:tmpFilePath]) {
+                //3.copy slice data file from sand box path to given path
                 NSString *slicePath = [strongSelf cachedSliceDataPathWithSliceFlag:rangeString];
                 [strongSelf moveFileFrom:tmpFilePath to:slicePath overWrite:YES];
                 BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
                 [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateSuccessed) forKey:rangeString];
                 
                 NSArray *allValues = [cacheInfo.slicesRecord allValues];
-                cacheInfo.state = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloaderLocalCacheStatePart : BAFileDownloaderLocalCacheStateFull;
-                [strongSelf updateCacheInfo:cacheInfo];
-                
-                if (cacheInfo.state == BAFileDownloaderLocalCacheStateFull) {
-                    [strongSelf mergeAllSlicesData];
+                BAFileDownloaderLocalCacheState tmpState = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloaderLocalCacheStatePart : BAFileDownloaderLocalCacheStateFull;
+                if (tmpState == BAFileDownloaderLocalCacheStateFull) {
+                    __weak typeof(strongSelf) weakSelf2 = strongSelf;
+                    //4.merge all slices if all of it saved
+                    [strongSelf mergeAllSlicesDataWithFinishedBlock:^(NSError *mergeActionError){
+                        __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
+                        if (!mergeActionError) {
+                            //5.update cache info
+                            cacheInfo.state = BAFileDownloaderLocalCacheStateFull;
+                            [strongSelf2 updateCacheInfo:cacheInfo];
+                            [strongSelf2 removeFilesAtPath:[strongSelf2 slicesPoolPath]];
+                            [strongSelf2 createDirectoryAtPath:[strongSelf2 slicesPoolPath]];
+                        }
+                        //6.call finished action block
+                        finishedActionBlock(mergeActionError);
+                    }];
+                } else {
+                    cacheInfo.state = tmpState;
+                    [strongSelf updateCacheInfo:cacheInfo];
+                    finishedActionBlock(nil);
                 }
             } else {
-                NSLog(@"");
+                finishedActionBlock([NSError BAFD_simpleErrorWithDescription:@"slice file invalid"]);
             }
-        }
-        if (finishedBlock) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                finishedBlock();
-            });
         }
     }];
 }
 
 - (NSString *)fullDataPath
 {
-    return nil;
+    return [self cacheInfo].state == BAFileDownloaderLocalCacheStateFull ? [self cachedFullDataPath] : nil;
 }
 
 - (void)cleanCache
@@ -394,15 +417,37 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
 }
 
 #pragma mark slice method
-- (void)mergeAllSlicesData
+- (void)mergeAllSlicesDataWithFinishedBlock:(void(^)(NSError *error))finishedBlock
 {
-//    //需改为使用NSInputStream/NSOutputStream进行文件合并，以避免爆内存问题
-//    NSString *slicePath = [self cachedSliceDataPathForURL:URL sliceNumber:0];
-//    NSString *fullDataPath = [self cachedFullDataPathForURL:URL];
-//    if (![self isPathExist:slicePath] || [self isPathExist:fullDataPath]) {
-//        return;
-//    }
-//    [self copyFileFrom:slicePath to:fullDataPath overWrite:YES];
+    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    if (!cacheInfo) {
+        if (finishedBlock) {
+            finishedBlock([NSError BAFD_simpleErrorWithDescription:@"cache is null"]);
+        }
+        return;
+    }
+    NSMutableArray *allSlices = cacheInfo.slicesRecord.allKeys.mutableCopy;
+    [allSlices sortUsingComparator:^NSComparisonResult(id  _Nonnull obj1, id  _Nonnull obj2) {
+        if ([obj1 isKindOfClass:[NSString class]] && [obj2 isKindOfClass:[NSString class]]) {
+            NSRange range1 = NSRangeFromString(obj1);
+            NSRange range2 = NSRangeFromString(obj2);
+            if (range1.location != NSNotFound && range2.location != NSNotFound) {
+                return (range1.location < range2.location) ? NSOrderedAscending : NSOrderedDescending;
+            } else {
+                return NSOrderedAscending;
+            }
+        } else {
+            return NSOrderedAscending;
+        }
+    }];
+    for (NSInteger i=0; i<allSlices.count; i++) {
+        [allSlices replaceObjectAtIndex:i withObject:[self cachedSliceDataPathWithSliceFlag:[allSlices objectAtIndex:i]]];
+    }
+    [BAStreamFileMerger mergeFiles:allSlices into:[self cachedFullDataPath] finishedBlock:^(NSError *error) {
+        if (finishedBlock) {
+            finishedBlock(error);
+        }
+    }];
 }
 
 @end

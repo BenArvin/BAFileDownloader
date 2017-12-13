@@ -24,6 +24,8 @@
 @property (nonatomic) BOOL inFragmentMode;
 @property (nonatomic) NSUInteger fragmentSize;
 
+@property (nonatomic) NSError *operationError;
+
 @property (nonatomic) NSMutableArray *tasks;
 @property (nonatomic) NSOperationQueue *operationQueue;
 @property (nonatomic) NSOperationQueue *networkQueue;
@@ -115,7 +117,7 @@
                 if (!error) {
                     //2.update cache info & build slice sheet
                     __weak typeof(strongSelf2) weakSelf3 = strongSelf2;
-                    [strongSelf2.localCache updateSlicesSheet:contentLength sliceSize:(strongSelf2.inFragmentMode && acceptRanges) ? strongSelf2.fragmentSize : contentLength finishedBlock:^(){
+                    [strongSelf2.localCache updateSlicesSheet:contentLength sliceSize:(strongSelf2.inFragmentMode && acceptRanges) ? strongSelf2.fragmentSize : contentLength finishedBlock:^(NSError *error){
                         __strong typeof(weakSelf3) strongSelf3 = weakSelf3;
                         //3.download & cache slices
                         [strongSelf3 downloadAndCacheSlicesData];
@@ -179,9 +181,12 @@
 
 - (void)downloadAndCacheSlicesData
 {
+    //1.get uncached slices info
     __weak typeof(self) weakSelf = self;
     [self.localCache getUncachedSliceRanges:^(NSArray *sliceRanges) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
+        //2.start download slices
+        __block NSInteger count = sliceRanges.count;
         dispatch_semaphore_t semaphore = dispatch_semaphore_create(5);
         for (NSString *rangeString in sliceRanges) {
             dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
@@ -189,15 +194,22 @@
             __weak typeof(strongSelf) weakSelf2 = strongSelf;
             [strongSelf.networkQueue addOperationWithBlock:^{
                 __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
+                //3.build net request for each slice
                 NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:strongSelf2.URL]];
                 [request setValue:[NSString stringWithFormat:@"Bytes=%lu-%lu", range.location, range.location + range.length] forHTTPHeaderField:@"Range"];
                 __weak typeof(strongSelf2) weakSelf3 = strongSelf2;
                 NSURLSessionDownloadTask *sessionTask = [[BAFileDownloaderSession sharedSession] downloadTaskWithRequest:request completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
                     __strong typeof(weakSelf3) strongSelf3 = weakSelf3;
-                    if (![[NSFileManager defaultManager] fileExistsAtPath:location.relativePath]) {
-                        NSLog(@"");
-                    }
-                    [strongSelf3.localCache saveSliceData:location ? location.relativePath : nil error:error sliceRange:range finishedBlock:^{
+                    __weak typeof(strongSelf3) weakSelf4 = strongSelf3;
+                    //4.save net response
+                    [strongSelf3.localCache saveSliceData:location ? location.relativePath : nil error:error sliceRange:range finishedBlock:^(NSError *saveActionError){
+                        __strong typeof(weakSelf4) strongSelf4 = weakSelf4;
+                        count--;
+                        strongSelf4.operationError = saveActionError;
+                        if (count == 0) {
+                            //5.operation finished if all requsets finished
+                            [strongSelf4 operationFinished];
+                        }
                         dispatch_semaphore_signal(semaphore);
                     }];
                 }];
@@ -205,6 +217,20 @@
             }];
         }
     }];
+}
+
+#pragma mark others
+- (void)operationFinished
+{
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        for (BAFileDownloadTask *task in strongSelf.tasks) {
+            if (task.finishedBlock) {
+                task.finishedBlock(strongSelf.URL, [strongSelf.localCache fullDataPath], strongSelf.operationError);
+            }
+        }
+    });
 }
 
 @end

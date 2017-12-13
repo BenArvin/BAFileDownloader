@@ -17,6 +17,10 @@
 
 @implementation BAFileDownloaderSession
 
+- (void)dealloc
+{
+}
+
 - (instancetype)init
 {
     self = [super init];
