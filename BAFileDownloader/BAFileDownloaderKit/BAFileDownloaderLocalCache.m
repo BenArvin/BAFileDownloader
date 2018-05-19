@@ -157,7 +157,8 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
         NSMutableArray *result = nil;
         BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
         for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
-            if (BAFileLocalCacheSliceStateNull == ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue) {
+            BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
+            if (BAFileLocalCacheSliceStateNull == state || BAFileLocalCacheSliceStateError == state) {
                 if (!result) {
                     result = [[NSMutableArray alloc] init];
                 }

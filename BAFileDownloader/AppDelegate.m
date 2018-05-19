@@ -18,7 +18,8 @@
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     // Override point for customization after application launch.
     
-    NSLog(@"---- root path: %@", NSHomeDirectory());
+    //will cause memory leak
+//    NSLog(@"---- root path: %@", NSHomeDirectory());
     
     return YES;
 }

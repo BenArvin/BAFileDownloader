@@ -23,6 +23,8 @@ typedef void(^BAStreamFileMergerFinishedBlock)(NSError *error);
 @property (nonatomic) NSString *targetPath;
 @property (nonatomic) BAStreamFileMergerFinishedBlock finishedBlock;
 
+@property (nonatomic) BOOL isLastSlice;
+
 @end
 
 @implementation BAStreamFileMerger
@@ -43,16 +45,24 @@ typedef void(^BAStreamFileMergerFinishedBlock)(NSError *error);
 }
 
 #pragma mark - public method
-+ (void)mergeFiles:(NSArray <NSString *> *)silcesPaths into:(NSString *)targetPath finishedBlock:(void(^)(NSError *error))finishedBlock
++ (void)mergeFiles:(NSArray <NSString *> *)slicesPaths into:(NSString *)targetPath finishedBlock:(void(^)(NSError *error))finishedBlock
 {
-    BAStreamFileMerger *merger = [[BAStreamFileMerger alloc] init];
-    [BAStreamFileMerger registerLiving:merger];//keep merger alive
-    
-    merger.targetPath = targetPath;
-    merger.finishedBlock = finishedBlock;
-    merger.unmergedFilePaths = silcesPaths.mutableCopy;
-    
-    [merger performSelector:@selector(startMergeAction) onThread:[BAStreamFileMerger sharedThread] withObject:nil waitUntilDone:NO modes:@[NSRunLoopCommonModes]];
+    if (!slicesPaths || slicesPaths.count == 0 || !targetPath || targetPath.length == 0) {
+        if (finishedBlock) {
+            finishedBlock([NSError BAFD_simpleErrorWithDescription:@"slices info error"]);
+        }
+        return;
+    }
+    dispatch_async([self sharedActionQueue], ^() {
+        BAStreamFileMerger *merger = [[BAStreamFileMerger alloc] init];
+        [BAStreamFileMerger registerLiving:merger];//keep merger alive
+        
+        merger.targetPath = targetPath;
+        merger.finishedBlock = finishedBlock;
+        merger.unmergedFilePaths = slicesPaths.mutableCopy;
+        
+        [merger performSelector:@selector(startMergeAction) onThread:[BAStreamFileMerger sharedThread] withObject:nil waitUntilDone:NO modes:@[NSRunLoopCommonModes]];
+    });
 }
 
 - (void)startMergeAction
@@ -81,10 +91,15 @@ typedef void(^BAStreamFileMergerFinishedBlock)(NSError *error);
             if ([aStream isKindOfClass:[NSInputStream class]]) {
                 NSInputStream *inputStream = (NSInputStream *)aStream;
                 if ([inputStream hasBytesAvailable]) {
-                    uint8_t buffer[1024];
+                    NSInteger bufferSize = 1024;
+                    uint8_t buffer[bufferSize];
                     NSInteger readedLength = [((NSInputStream *)aStream) read:buffer maxLength:(NSUInteger)sizeof(buffer)];
+                    if (!self.isLastSlice) {
+                        //last byte might be end flag of slice file, so drop it befor last slice
+                        readedLength = readedLength == bufferSize ? readedLength: readedLength - 1;
+                    }
                     if (readedLength > 0) {
-                        NSInteger writedLength = [self write:buffer maxLength:(NSUInteger)sizeof(buffer)];
+                        NSInteger writedLength = [self write:buffer maxLength:readedLength];
                         if (writedLength == 0) {
                             [self mergeActionFinished:nil];
                         }
@@ -131,6 +146,16 @@ typedef void(^BAStreamFileMergerFinishedBlock)(NSError *error);
 
 #pragma mark - private method
 #pragma mark thread method
++ (dispatch_queue_t)sharedActionQueue
+{
+    static dispatch_once_t onceToken;
+    static dispatch_queue_t _actionQueue;
+    dispatch_once(&onceToken, ^{
+        _actionQueue = dispatch_queue_create("com.BAFileDownloader.BAStreamFileMerger", DISPATCH_QUEUE_SERIAL);
+    });
+    return _actionQueue;
+}
+
 + (void) __attribute__((noreturn)) sharedThreadEntryPoint:(id)__unused object {
     do {
         @autoreleasepool {
@@ -250,6 +275,9 @@ typedef void(^BAStreamFileMergerFinishedBlock)(NSError *error);
         if (self.unmergedFilePaths.count == 0) {
             [self mergeActionFinished:nil];
         } else {
+            if (self.unmergedFilePaths.count == 1) {
+                self.isLastSlice = YES;
+            }
             NSError *error = [self startInputWithFilePath:self.unmergedFilePaths.firstObject];
             if (error) {
                 [self mergeActionFinished:error];
@@ -261,15 +289,18 @@ typedef void(^BAStreamFileMergerFinishedBlock)(NSError *error);
 - (void)mergeActionFinished:(NSError *)error
 {
     [self closeAllStream];
-    [self.unmergedFilePaths removeAllObjects];
-    if (error) {
-        [self removeFilesAtPath:self.targetPath];
-    }
-    if (self.finishedBlock) {
-        self.finishedBlock(error);
-    }
-    self.finishedBlock = nil;
-    [BAStreamFileMerger unregisterLiving:self];
+    __weak typeof(self) weakSelf = self;
+    dispatch_async([[self class] sharedActionQueue], ^() {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        [strongSelf.unmergedFilePaths removeAllObjects];
+        if (error) {
+            [strongSelf removeFilesAtPath:strongSelf.targetPath];
+        }
+        if (strongSelf.finishedBlock) {
+            strongSelf.finishedBlock(error);
+        }
+        [BAStreamFileMerger unregisterLiving:strongSelf];
+    });
 }
 
 @end

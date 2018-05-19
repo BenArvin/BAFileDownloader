@@ -11,7 +11,7 @@
 #import "BAFileDownloadOperation.h"
 #import "NSString+BAFileDownloaderCategory.h"
 
-@interface BAFileDownloader()
+@interface BAFileDownloader()<BAFileDownloadOperationDelegate>
 
 @property (nonatomic) NSMutableDictionary <NSString *, BAFileDownloadOperation *> *operationsDic;//key:URL(MD5), value:downloadOperation
 @property (nonatomic) NSOperationQueue *queue;
@@ -83,6 +83,7 @@
         BAFileDownloadOperation *operation = [strongSelf.operationsDic objectForKey:key];
         if (!operation) {
             operation = [[BAFileDownloadOperation alloc] init];
+            operation.delegate = self;
             [strongSelf.operationsDic setObject:operation forKey:key];
         }
         [operation addTask:task];
@@ -128,6 +129,15 @@
         NSString *key = [URL BAFD_MD5];
         BAFileDownloadOperation *operation = [strongSelf.operationsDic objectForKey:key];
         [operation pause];
+    }];
+}
+#pragma mark - BAFileDownloadOperationDelegate
+- (void)fileDownloadOperation:(BAFileDownloadOperation *)operation finished:(NSError *)error
+{
+    __weak typeof(self) weakSelf = self;
+    [self.queue addOperationWithBlock:^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        [strongSelf.operationsDic removeObjectForKey:[operation.URL BAFD_MD5]];
     }];
 }
 

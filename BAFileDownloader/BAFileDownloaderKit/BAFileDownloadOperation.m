@@ -106,10 +106,7 @@
             return;
         }
         strongSelf.running = YES;
-        
-        if (strongSelf.localCache.state == BAFileDownloaderLocalCacheStateFull) {
-            return;//already full cached
-        } else if (strongSelf.localCache.state == BAFileDownloaderLocalCacheStateNull) {
+        if (strongSelf.localCache.state == BAFileDownloaderLocalCacheStateNull) {
             //1.get full content length & accept ranges?
             __weak typeof(strongSelf) weakSelf2 = strongSelf;
             [strongSelf getRemoteResourceInfoForURL:strongSelf.URL finishedBlock:^(BOOL acceptRanges, NSInteger contentLength, NSError *error) {
@@ -122,11 +119,16 @@
                         //3.download & cache slices
                         [strongSelf3 downloadAndCacheSlicesData];
                     }];
+                    return;
+                } else {
+                    strongSelf2.operationError = error;
                 }
             }];
         } else if (strongSelf.localCache.state == BAFileDownloaderLocalCacheStatePart) {
             [strongSelf downloadAndCacheSlicesData];
+            return;
         }
+        [strongSelf operationFinished];
     }];
 }
 
@@ -185,6 +187,11 @@
     __weak typeof(self) weakSelf = self;
     [self.localCache getUncachedSliceRanges:^(NSArray *sliceRanges) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!sliceRanges || sliceRanges.count == 0) {
+            strongSelf.operationError = [NSError BAFD_simpleErrorWithDescription:@"get slice ranges failed!"];
+            [strongSelf operationFinished];
+            return;
+        }
         //2.start download slices
         __block NSInteger count = sliceRanges.count;
         dispatch_semaphore_t semaphore = dispatch_semaphore_create(5);
@@ -229,6 +236,9 @@
             if (task.finishedBlock) {
                 task.finishedBlock(strongSelf.URL, [strongSelf.localCache fullDataPath], strongSelf.operationError);
             }
+        }
+        if ([strongSelf.delegate respondsToSelector:@selector(fileDownloadOperation:finished:)]) {
+            [strongSelf.delegate fileDownloadOperation:strongSelf finished:nil];
         }
     });
 }

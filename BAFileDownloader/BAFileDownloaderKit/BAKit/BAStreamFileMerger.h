@@ -10,6 +10,6 @@
 
 @interface BAStreamFileMerger : NSObject
 
-+ (void)mergeFiles:(NSArray <NSString *> *)silcesPaths into:(NSString *)targetPath finishedBlock:(void(^)(NSError *error))finishedBlock;
++ (void)mergeFiles:(NSArray <NSString *> *)slicesPaths into:(NSString *)targetPath finishedBlock:(void(^)(NSError *error))finishedBlock;
 
 @end
