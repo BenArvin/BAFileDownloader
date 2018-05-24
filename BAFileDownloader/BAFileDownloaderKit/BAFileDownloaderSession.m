@@ -7,11 +7,11 @@
 //
 
 #import "BAFileDownloaderSession.h"
+#import "BAFileDownloaderThreads.h"
 
 @interface BAFileDownloaderSession() <NSURLSessionDelegate>
 
 @property (nonatomic) NSURLSession *session;
-@property (nonatomic) NSOperationQueue *queue;
 
 @end
 
@@ -19,34 +19,57 @@
 
 - (void)dealloc
 {
+    if (self.session) {
+        [self.session invalidateAndCancel];
+    }
 }
 
 - (instancetype)init
 {
     self = [super init];
     if (self) {
-        _queue = [[NSOperationQueue alloc] init];
-        _queue.name = @"BAFileDownloaderSessionQueue";
-        _session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:self.queue];
+        _session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:[BAFileDownloaderThreads networkQueue]];
     }
     return self;
 }
 
 #pragma mark - public method
-+ (NSURLSession *)sharedSession
-{
-    return [BAFileDownloaderSession sharedDownloaderSession].session;
-}
-
-#pragma mark - private method
-+ (BAFileDownloaderSession *)sharedDownloaderSession
++ (BAFileDownloaderSession *)sharedSession
 {
     static dispatch_once_t onceToken;
-    static BAFileDownloaderSession *sharedDownloaderSession;
+    static BAFileDownloaderSession *_sharedSession;
     dispatch_once(&onceToken, ^{
-        sharedDownloaderSession = [[BAFileDownloaderSession alloc] init];
+        _sharedSession = [[BAFileDownloaderSession alloc] init];
     });
-    return sharedDownloaderSession;
+    return _sharedSession;
+}
+
+- (void)startDataTask:(NSMutableURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler
+{
+    __weak typeof(self) weakSelf = self;
+    [[BAFileDownloaderThreads networkQueue] addOperationWithBlock:^() {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        NSURLSessionDataTask *sessionTask = [strongSelf.session dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+            if (completionHandler) {
+                completionHandler(data, response, error);
+            }
+        }];
+        [sessionTask resume];
+    }];
+}
+
+- (void)startDownloadTask:(NSMutableURLRequest *)request completionHandler:(void (^)(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler
+{
+    __weak typeof(self) weakSelf = self;
+    [[BAFileDownloaderThreads networkQueue] addOperationWithBlock:^() {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        NSURLSessionDownloadTask *sessionTask = [strongSelf.session downloadTaskWithRequest:request completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+            if (completionHandler) {
+                completionHandler(location, response, error);
+            }
+        }];
+        [sessionTask resume];
+    }];
 }
 
 @end

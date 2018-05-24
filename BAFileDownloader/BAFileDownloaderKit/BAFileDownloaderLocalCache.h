@@ -14,16 +14,21 @@ typedef NS_ENUM(NSUInteger, BAFileDownloaderLocalCacheState) {
     BAFileDownloaderLocalCacheStateFull,
 };
 
+
+/**
+ non-thread safe
+ */
 @interface BAFileDownloaderLocalCache : NSObject
 
 - (instancetype)initWithURL:(NSString *)URL;
 
 - (BAFileDownloaderLocalCacheState)state;
-- (void)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize finishedBlock:(void(^)(NSError *error))finishedBlock;
+- (NSError *)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize;
 
-- (void)getUncachedSliceRanges:(void(^)(NSArray *sliceRanges))finishedBlock;
-- (void)getFailedSliceRanges:(void(^)(NSArray *sliceRanges))finishedBlock;
-- (void)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange finishedBlock:(void(^)(NSError *error))finishedBlock;
+- (NSArray *)getUncachedSliceRanges;
+- (NSArray *)getFailedSliceRanges;
+- (NSString *)cacheNetResponseTmpSliceData:(NSString *)dataPath sliceRange:(NSRange)sliceRange;
+- (NSError *)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange;
 
 - (NSString *)fullDataPath;
 

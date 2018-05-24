@@ -10,31 +10,21 @@
 #import "BAFileDownloadTask.h"
 #import "BAFileDownloadOperation.h"
 #import "NSString+BAFileDownloaderCategory.h"
+#import "BAFileDownloaderThreads.h"
 
 @interface BAFileDownloader()<BAFileDownloadOperationDelegate>
 
 @property (nonatomic) NSMutableDictionary <NSString *, BAFileDownloadOperation *> *operationsDic;//key:URL(MD5), value:downloadOperation
-@property (nonatomic) NSOperationQueue *queue;
 
 @end
 
 @implementation BAFileDownloader
-
-- (void)dealloc
-{
-    if (_queue) {
-        [_queue cancelAllOperations];
-    }
-}
 
 - (instancetype)init
 {
     self = [super init];
     if (self) {
         _operationsDic = [[NSMutableDictionary alloc] init];
-        _queue = [[NSOperationQueue alloc] init];
-        _queue.maxConcurrentOperationCount = 1;
-        _queue.name = @"BAFileDownloaderQueue";
     }
     return self;
 }
@@ -74,7 +64,7 @@
 - (void)addTask:(BAFileDownloadTask *)task
 {
     __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
+    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!task || ![task.URL BAFD_isValid]) {
             return;
@@ -93,7 +83,7 @@
 - (void)removeTask:(BAFileDownloadTask *)task
 {
     __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
+    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!task || ![task.URL BAFD_isValid]) {
             return;
@@ -107,7 +97,7 @@
 - (void)startTasksWithURL:(NSString *)URL
 {
     __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
+    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (![URL BAFD_isValid]) {
             return;
@@ -121,7 +111,7 @@
 - (void)pauseTasksWithURL:(NSString *)URL
 {
     __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
+    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (![URL BAFD_isValid]) {
             return;
@@ -131,11 +121,12 @@
         [operation pause];
     }];
 }
+
 #pragma mark - BAFileDownloadOperationDelegate
 - (void)fileDownloadOperation:(BAFileDownloadOperation *)operation finished:(NSError *)error
 {
     __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
+    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         [strongSelf.operationsDic removeObjectForKey:[operation.URL BAFD_MD5]];
     }];

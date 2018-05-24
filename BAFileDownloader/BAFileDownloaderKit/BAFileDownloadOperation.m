@@ -12,6 +12,7 @@
 #import "BAFileDownloaderSession.h"
 #import "NSError+BAFileDownloaderCategory.h"
 #import "BAFileDownloaderLocalCache.h"
+#import "BAFileDownloaderThreads.h"
 
 @interface BAFileDownloadOperation()
 
@@ -27,36 +28,16 @@
 @property (nonatomic) NSError *operationError;
 
 @property (nonatomic) NSMutableArray *tasks;
-@property (nonatomic) NSOperationQueue *operationQueue;
-@property (nonatomic) NSOperationQueue *networkQueue;
 
 @end
 
 @implementation BAFileDownloadOperation
-
-- (void)dealloc
-{
-    if (_operationQueue) {
-        [_operationQueue cancelAllOperations];
-    }
-    if (_networkQueue) {
-        [_networkQueue cancelAllOperations];
-    }
-}
 
 - (instancetype)init
 {
     self = [super init];
     if (self) {
         _tasks = [[NSMutableArray alloc] init];
-        
-        _operationQueue = [[NSOperationQueue alloc] init];
-        _operationQueue.name = @"BAFileDownloadOperationQueue";
-        _operationQueue.maxConcurrentOperationCount = 1;
-        
-        _networkQueue = [[NSOperationQueue alloc] init];
-        _networkQueue.name = @"BAFileDownloadOperationNetworkQueue";
-        _networkQueue.maxConcurrentOperationCount = 5;
         
         _inFragmentMode = YES;
         _fragmentSize = 1024 * 10;
@@ -67,69 +48,53 @@
 #pragma mark - public method
 - (void)addTask:(BAFileDownloadTask *)task
 {
-    __weak typeof(self) weakSelf = self;
-    [self.operationQueue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!task || [strongSelf.tasks containsObject:task]) {
-            return;
-        }
-        if (strongSelf.tasks.count == 0) {
-            strongSelf.URL = task.URL;
-            strongSelf.fileMD5 = task.fileMD5;
-            strongSelf.inFragmentMode = task.inFragmentMode;
-            strongSelf.fragmentSize = task.fragmentSize;
-            
-            strongSelf.localCache = [[BAFileDownloaderLocalCache alloc] initWithURL:task.URL];
-        }
-        [strongSelf.tasks addObject:task];
-    }];
+    if (!task || [self.tasks containsObject:task]) {
+        return;
+    }
+    if (self.tasks.count == 0) {
+        self.URL = task.URL;
+        self.fileMD5 = task.fileMD5;
+        self.inFragmentMode = task.inFragmentMode;
+        self.fragmentSize = task.fragmentSize;
+        
+        self.localCache = [[BAFileDownloaderLocalCache alloc] initWithURL:task.URL];
+    }
+    [self.tasks addObject:task];
 }
 
 - (void)removeTask:(BAFileDownloadTask *)task
 {
-    __weak typeof(self) weakSelf = self;
-    [self.operationQueue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!task || ![strongSelf.tasks containsObject:task]) {
-            return;
-        }
-        [strongSelf.tasks removeObject:task];
-    }];
+    if (!task || ![self.tasks containsObject:task]) {
+        return;
+    }
+    [self.tasks removeObject:task];
 }
 
 - (void)start
 {
-    __weak typeof(self) weakSelf = self;
-    [self.operationQueue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (![strongSelf.URL BAFD_isValid] || strongSelf.running) {
-            return;
-        }
-        strongSelf.running = YES;
-        if (strongSelf.localCache.state == BAFileDownloaderLocalCacheStateNull) {
-            //1.get full content length & accept ranges?
-            __weak typeof(strongSelf) weakSelf2 = strongSelf;
-            [strongSelf getRemoteResourceInfoForURL:strongSelf.URL finishedBlock:^(BOOL acceptRanges, NSInteger contentLength, NSError *error) {
-                __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
-                if (!error) {
-                    //2.update cache info & build slice sheet
-                    __weak typeof(strongSelf2) weakSelf3 = strongSelf2;
-                    [strongSelf2.localCache updateSlicesSheet:contentLength sliceSize:(strongSelf2.inFragmentMode && acceptRanges) ? strongSelf2.fragmentSize : contentLength finishedBlock:^(NSError *error){
-                        __strong typeof(weakSelf3) strongSelf3 = weakSelf3;
-                        //3.download & cache slices
-                        [strongSelf3 downloadAndCacheSlicesData];
-                    }];
-                    return;
-                } else {
-                    strongSelf2.operationError = error;
-                }
-            }];
-        } else if (strongSelf.localCache.state == BAFileDownloaderLocalCacheStatePart) {
-            [strongSelf downloadAndCacheSlicesData];
-            return;
-        }
-        [strongSelf operationFinished];
-    }];
+    if (![self.URL BAFD_isValid] || self.running) {
+        return;
+    }
+    self.running = YES;
+    if (self.localCache.state == BAFileDownloaderLocalCacheStateNull) {
+        //1.get full content length & accept ranges?
+        __weak typeof(self) weakSelf1 = self;
+        [self getRemoteResourceInfoForURL:self.URL finishedBlock:^(BOOL acceptRanges, NSInteger contentLength, NSError *error) {
+            __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
+            if (!error) {
+                //2.update cache info & build slice sheet
+                [strongSelf1.localCache updateSlicesSheet:contentLength sliceSize:(strongSelf1.inFragmentMode && acceptRanges) ? strongSelf1.fragmentSize : contentLength];
+                //3.download & cache slices
+                [strongSelf1 downloadAndCacheSlicesData];
+            } else {
+                strongSelf1.operationError = error;
+            }
+        }];
+    } else if (self.localCache.state == BAFileDownloaderLocalCacheStatePart) {
+        [self downloadAndCacheSlicesData];
+    } else {
+        [self operationFinished];
+    }
 }
 
 - (void)pause
@@ -144,103 +109,101 @@
 #pragma mark network method
 - (void)getRemoteResourceInfoForURL:(NSString *)URL finishedBlock:(void(^)(BOOL acceptRanges, NSInteger contentLength, NSError *error))finishedBlock
 {
-    __weak typeof(self) weakSelf = self;
-    [self.networkQueue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (![strongSelf.URL BAFD_isValid]) {
-            if (finishedBlock) {
-                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                    finishedBlock(NO, 0, [NSError BAFD_simpleErrorWithDescription:@"invalid URL"]);
-                });
-            }
-            return;
+    if (![self.URL BAFD_isValid]) {
+        if (finishedBlock) {
+            finishedBlock(NO, 0, [NSError BAFD_simpleErrorWithDescription:@"invalid URL"]);
         }
-        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:strongSelf.URL]];
-        request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
-        request.HTTPMethod = @"HEAD";
-        NSURLSessionDataTask *sessionTask = [[BAFileDownloaderSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
-            if (!error && [response isKindOfClass:[NSHTTPURLResponse class]]) {
-                NSDictionary *result = ((NSHTTPURLResponse *)response).allHeaderFields;
-                NSString *acceptRanges = [result objectForKey:@"Accept-Ranges"];
-                if (finishedBlock) {
-                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                        finishedBlock([acceptRanges rangeOfString:@"bytes"].location != NSNotFound,
-                                      ((NSNumber *)[result objectForKey:@"Content-Length"]).integerValue,
-                                      nil);
-                    });
+        return;
+    }
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:self.URL]];
+    request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    request.HTTPMethod = @"HEAD";
+    [[BAFileDownloaderSession sharedSession] startDataTask:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        BOOL acceptRanges = NO;
+        NSInteger contentLength = 0;
+        NSError *responseError = nil;
+        if (!error && [response isKindOfClass:[NSHTTPURLResponse class]]) {
+            NSDictionary *result = ((NSHTTPURLResponse *)response).allHeaderFields;
+            if (result) {
+                NSString *acceptRangesString = [result objectForKey:@"Accept-Ranges"];
+                if (acceptRangesString) {
+                    acceptRanges = ([acceptRangesString rangeOfString:@"bytes"].location != NSNotFound);
                 }
+                contentLength = ((NSNumber *)[result objectForKey:@"Content-Length"]).integerValue;
             } else {
-                if (finishedBlock) {
-                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                        finishedBlock(NO, 0, error ? error : [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"]);
-                    });
-                }
+                error = [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"];
             }
-        }];
-        [sessionTask resume];
+        } else {
+            responseError = error ? error : [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"];
+        }
+        if (finishedBlock) {
+            [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^() {
+                finishedBlock(acceptRanges, contentLength, responseError);
+            }];
+        }
     }];
 }
 
 - (void)downloadAndCacheSlicesData
 {
     //1.get uncached slices info
-    __weak typeof(self) weakSelf = self;
-    [self.localCache getUncachedSliceRanges:^(NSArray *sliceRanges) {
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!sliceRanges || sliceRanges.count == 0) {
-            strongSelf.operationError = [NSError BAFD_simpleErrorWithDescription:@"get slice ranges failed!"];
-            [strongSelf operationFinished];
-            return;
-        }
-        //2.start download slices
-        __block NSInteger count = sliceRanges.count;
-        dispatch_semaphore_t semaphore = dispatch_semaphore_create(5);
-        for (NSString *rangeString in sliceRanges) {
-            dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-            NSRange range = NSRangeFromString(rangeString);
-            __weak typeof(strongSelf) weakSelf2 = strongSelf;
-            [strongSelf.networkQueue addOperationWithBlock:^{
+    NSArray *sliceRanges = [self.localCache getUncachedSliceRanges];
+    if (!sliceRanges || sliceRanges.count == 0) {
+        self.operationError = [NSError BAFD_simpleErrorWithDescription:@"get slice ranges failed!"];
+        [self operationFinished];
+        return;
+    }
+    //2.start download slices
+    __block NSInteger count = sliceRanges.count;
+    for (NSString *rangeString in sliceRanges) {
+        NSRange range = NSRangeFromString(rangeString);
+        
+        //3.build net request for each slice
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:self.URL]];
+        [request setValue:[NSString stringWithFormat:@"Bytes=%lu-%lu", range.location, range.location + range.length] forHTTPHeaderField:@"Range"];
+        
+        //4.start net request
+        __weak typeof(self) weakSelf1 = self;
+        [[BAFileDownloaderSession sharedSession] startDownloadTask:request completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+            __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
+            //5.copy tmp file from NSURLSession tmp files path to sand box synchronized, in case tmp file removed
+            NSString *netResponseTmpFilePath = nil;
+            if (!error && location) {
+                netResponseTmpFilePath = location.relativePath;
+            }
+            NSString *cachedTmpFilePath = [strongSelf1.localCache cacheNetResponseTmpSliceData:netResponseTmpFilePath sliceRange:range];
+            
+            //6.save net response
+            __weak typeof(strongSelf1) weakSelf2 = strongSelf1;
+            [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^() {
                 __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
-                //3.build net request for each slice
-                NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:strongSelf2.URL]];
-                [request setValue:[NSString stringWithFormat:@"Bytes=%lu-%lu", range.location, range.location + range.length] forHTTPHeaderField:@"Range"];
-                __weak typeof(strongSelf2) weakSelf3 = strongSelf2;
-                NSURLSessionDownloadTask *sessionTask = [[BAFileDownloaderSession sharedSession] downloadTaskWithRequest:request completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
-                    __strong typeof(weakSelf3) strongSelf3 = weakSelf3;
-                    __weak typeof(strongSelf3) weakSelf4 = strongSelf3;
-                    //4.save net response
-                    [strongSelf3.localCache saveSliceData:location ? location.relativePath : nil error:error sliceRange:range finishedBlock:^(NSError *saveActionError){
-                        __strong typeof(weakSelf4) strongSelf4 = weakSelf4;
-                        count--;
-                        strongSelf4.operationError = saveActionError;
-                        if (count == 0) {
-                            //5.operation finished if all requsets finished
-                            [strongSelf4 operationFinished];
-                        }
-                        dispatch_semaphore_signal(semaphore);
-                    }];
-                }];
-                [sessionTask resume];
+                NSError *saveActionError = [strongSelf2.localCache saveSliceData:cachedTmpFilePath error:error sliceRange:range];
+                count--;
+                strongSelf2.operationError = saveActionError;
+                if (count == 0) {
+                    //7.operation finished if all requsets finished
+                    [strongSelf2 operationFinished];
+                }
             }];
-        }
-    }];
+        }];
+    }
 }
 
 #pragma mark others
 - (void)operationFinished
 {
-    __weak typeof(self) weakSelf = self;
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        for (BAFileDownloadTask *task in strongSelf.tasks) {
-            if (task.finishedBlock) {
+    for (BAFileDownloadTask *task in self.tasks) {
+        if (task.finishedBlock) {
+            __weak typeof(self) weakSelf = self;
+            [[BAFileDownloaderThreads outputQueue] addOperationWithBlock:^(){
+                __strong typeof(weakSelf) strongSelf = weakSelf;
                 task.finishedBlock(strongSelf.URL, [strongSelf.localCache fullDataPath], strongSelf.operationError);
-            }
+            }];
         }
-        if ([strongSelf.delegate respondsToSelector:@selector(fileDownloadOperation:finished:)]) {
-            [strongSelf.delegate fileDownloadOperation:strongSelf finished:nil];
-        }
-    });
+    }
+    if ([self.delegate respondsToSelector:@selector(fileDownloadOperation:finished:)]) {
+        [self.delegate fileDownloadOperation:self finished:nil];
+    }
 }
 
 @end

@@ -18,7 +18,7 @@ typedef NS_ENUM(NSUInteger, BAFileLocalCacheSliceState) {
     BAFileLocalCacheSliceStateSuccessed,
 };
 
-static NSString *const BAFileLocalCacheRootPath = @"BAFileLocalCache/";
+static NSString *const BAFileLocalCacheRootPath = @"Library/Caches/BAFileDownloader/";
 static NSString *const BAFileLocalCacheTmpFilePoolPath = @"tmpFilePool/";
 static NSString *const BAFileLocalCacheSlicesPoolPath = @"slicesPool/";
 static NSString *const BAFileLocalCacheInfoFileName = @"cacheInfo.plist";
@@ -91,7 +91,6 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
 @interface BAFileDownloaderLocalCache()
 
 @property (nonatomic) NSString *URL;
-@property (nonatomic) NSOperationQueue *queue;
 @property (nonatomic) BAFileDownloaderLocalCacheInfo *tmpCacheInfo;
 
 @end
@@ -103,9 +102,6 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
     self = [self init];
     if (self && [URL BAFD_isValid]) {
         _URL = URL;
-        _queue = [[NSOperationQueue alloc] init];
-        _queue.maxConcurrentOperationCount = 1;
-        _queue.name = [NSString stringWithFormat:@"BAFileDownloaderLocalCacheQueue_%@", [_URL BAFD_MD5]];
         [self createDirectoryAtPath:[self cacheFolderPath]];
         [self createDirectoryAtPath:[self slicesPoolPath]];
         [self createDirectoryAtPath:[self tmpFilePoolPath]];
@@ -120,143 +116,114 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
     return [self cacheInfo].state;
 }
 
-- (void)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize finishedBlock:(void(^)(NSError *error))finishedBlock
+- (NSError *)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize
 {
-    __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        NSMutableDictionary *newSlicesRecord = [[NSMutableDictionary alloc] init];
-        NSInteger sliceCount = ceil((CGFloat)fullDataLength / (CGFloat)sliceSize);
-        for (NSInteger i=0; i<sliceCount; i++) {
-            NSInteger location = sliceSize * i;
-            NSInteger destination = sliceSize * (i + 1);
-            if (destination > fullDataLength) {
-                destination = fullDataLength;
-            }
-            [newSlicesRecord setObject:@(BAFileLocalCacheSliceStateNull) forKey:NSStringFromRange(NSMakeRange(location, destination - location))];
+    NSMutableDictionary *newSlicesRecord = [[NSMutableDictionary alloc] init];
+    NSInteger sliceCount = ceil((CGFloat)fullDataLength / (CGFloat)sliceSize);
+    for (NSInteger i=0; i<sliceCount; i++) {
+        NSInteger location = sliceSize * i;
+        NSInteger destination = sliceSize * (i + 1);
+        if (destination > fullDataLength) {
+            destination = fullDataLength;
         }
-        BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
-        if (!cacheInfo) {
-            cacheInfo = [[BAFileDownloaderLocalCacheInfo alloc] init];
-        }
-        cacheInfo.slicesRecord = newSlicesRecord;
-        [strongSelf updateCacheInfo:cacheInfo];
-        if (finishedBlock) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                finishedBlock(nil);
-            });
-        }
-    }];
+        [newSlicesRecord setObject:@(BAFileLocalCacheSliceStateNull) forKey:NSStringFromRange(NSMakeRange(location, destination - location))];
+    }
+    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    if (!cacheInfo) {
+        cacheInfo = [[BAFileDownloaderLocalCacheInfo alloc] init];
+    }
+    cacheInfo.slicesRecord = newSlicesRecord;
+    [self updateCacheInfo:cacheInfo];
+    return nil;
 }
 
-- (void)getUncachedSliceRanges:(void(^)(NSArray *sliceRanges))finishedBlock
+- (NSArray *)getUncachedSliceRanges
 {
-    __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        NSMutableArray *result = nil;
-        BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
-        for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
-            BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
-            if (BAFileLocalCacheSliceStateNull == state || BAFileLocalCacheSliceStateError == state) {
-                if (!result) {
-                    result = [[NSMutableArray alloc] init];
-                }
-                [result addObject:rangeString];
+    NSMutableArray *result = nil;
+    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
+        BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
+        if (BAFileLocalCacheSliceStateNull == state || BAFileLocalCacheSliceStateError == state) {
+            if (!result) {
+                result = [[NSMutableArray alloc] init];
             }
+            [result addObject:rangeString];
         }
-        if (finishedBlock) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                finishedBlock(result);
-            });
-        }
-    }];
+    }
+    return result;
 }
 
-- (void)getFailedSliceRanges:(void(^)(NSArray *sliceRanges))finishedBlock
+- (NSArray *)getFailedSliceRanges
 {
-    __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        NSMutableArray *result = nil;
-        BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
-        for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
-            if (BAFileLocalCacheSliceStateError == ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue) {
-                if (!result) {
-                    result = [[NSMutableArray alloc] init];
-                }
-                [result addObject:rangeString];
+    NSMutableArray *result = nil;
+    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
+        if (BAFileLocalCacheSliceStateError == ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue) {
+            if (!result) {
+                result = [[NSMutableArray alloc] init];
             }
+            [result addObject:rangeString];
         }
-        if (finishedBlock) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                finishedBlock(result);
-            });
-        }
-    }];
+    }
+    return result;
 }
 
-- (void)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange finishedBlock:(void(^)(NSError *error))finishedBlock
+- (NSString *)cacheNetResponseTmpSliceData:(NSString *)dataPath sliceRange:(NSRange)sliceRange
 {
-    //1.copy tmp file from NSURLSession path to sand box path synchronized, in case tmp file deleted
+    if (![self isPathExist:dataPath]) {
+        return nil;
+    }
     NSString *rangeString = NSStringFromRange(sliceRange);
     NSString *tmpFilePath = [self tmpSliceFilePathWithSliceFlag:rangeString];
-    if (!error) {
-        [self copyFileFrom:dataPath to:tmpFilePath overWrite:YES];
-    }
-    __weak typeof(self) weakSelf = self;
-    [self.queue addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        
-        void(^finishedActionBlock)(NSError *) = ^(NSError *error){
-            if (finishedBlock) {
-                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(){
-                    finishedBlock(error);
-                });
-            }
-        };
-        
-        //2.start save action
-        if (error) {
-            BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
-            [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateError) forKey:NSStringFromRange(sliceRange)];
-            [strongSelf updateCacheInfo:cacheInfo];
-            finishedActionBlock(error);
-        } else {
-            if ([strongSelf isPathExist:tmpFilePath]) {
-                //3.copy slice data file from sand box path to given path
-                NSString *slicePath = [strongSelf cachedSliceDataPathWithSliceFlag:rangeString];
-                [strongSelf moveFileFrom:tmpFilePath to:slicePath overWrite:YES];
-                BAFileDownloaderLocalCacheInfo *cacheInfo = [strongSelf cacheInfo];
-                [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateSuccessed) forKey:rangeString];
+    [self copyFileFrom:dataPath to:tmpFilePath overWrite:YES];
+    return tmpFilePath;
+}
+
+- (NSError *)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange
+{
+    NSString *rangeString = NSStringFromRange(sliceRange);
+    if (error) {
+        BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+        [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateError) forKey:NSStringFromRange(sliceRange)];
+        [self updateCacheInfo:cacheInfo];
+        return nil;
+    } else {
+        if ([self isPathExist:dataPath]) {
+            //3.copy slice data file from sand box path to given path
+            NSString *slicePath = [self cachedSliceDataPathWithSliceFlag:rangeString];
+            [self moveFileFrom:dataPath to:slicePath overWrite:YES];
+            BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+            [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateSuccessed) forKey:rangeString];
+            
+            NSArray *allValues = [cacheInfo.slicesRecord allValues];
+            BAFileDownloaderLocalCacheState tmpState = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloaderLocalCacheStatePart : BAFileDownloaderLocalCacheStateFull;
+            if (tmpState == BAFileDownloaderLocalCacheStateFull) {
+                //4.merge all slices if all of it saved
+                __block NSError *tmpError = nil;
+                dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+                [self mergeAllSlicesDataWithFinishedBlock:^(NSError *mergeActionError){
+                    tmpError = mergeActionError;
+                    dispatch_semaphore_signal(semaphore);
+                }];
+                dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
                 
-                NSArray *allValues = [cacheInfo.slicesRecord allValues];
-                BAFileDownloaderLocalCacheState tmpState = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloaderLocalCacheStatePart : BAFileDownloaderLocalCacheStateFull;
-                if (tmpState == BAFileDownloaderLocalCacheStateFull) {
-                    __weak typeof(strongSelf) weakSelf2 = strongSelf;
-                    //4.merge all slices if all of it saved
-                    [strongSelf mergeAllSlicesDataWithFinishedBlock:^(NSError *mergeActionError){
-                        __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
-                        if (!mergeActionError) {
-                            //5.update cache info
-                            cacheInfo.state = BAFileDownloaderLocalCacheStateFull;
-                            [strongSelf2 updateCacheInfo:cacheInfo];
-                            [strongSelf2 removeFilesAtPath:[strongSelf2 slicesPoolPath]];
-                            [strongSelf2 createDirectoryAtPath:[strongSelf2 slicesPoolPath]];
-                        }
-                        //6.call finished action block
-                        finishedActionBlock(mergeActionError);
-                    }];
-                } else {
-                    cacheInfo.state = tmpState;
-                    [strongSelf updateCacheInfo:cacheInfo];
-                    finishedActionBlock(nil);
+                //5.update cache info
+                if (!tmpError) {
+                    cacheInfo.state = BAFileDownloaderLocalCacheStateFull;
+                    [self updateCacheInfo:cacheInfo];
+                    [self removeFilesAtPath:[self slicesPoolPath]];
+                    [self createDirectoryAtPath:[self slicesPoolPath]];
                 }
+                return tmpError;
             } else {
-                finishedActionBlock([NSError BAFD_simpleErrorWithDescription:@"slice file invalid"]);
+                cacheInfo.state = tmpState;
+                [self updateCacheInfo:cacheInfo];
+                return nil;
             }
+        } else {
+            return [NSError BAFD_simpleErrorWithDescription:@"slice file invalid"];
         }
-    }];
+    }
 }
 
 - (NSString *)fullDataPath

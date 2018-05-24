@@ -19,7 +19,7 @@
     // Override point for customization after application launch.
     
     //will cause memory leak
-//    NSLog(@"---- root path: %@", NSHomeDirectory());
+    NSLog(@"---- root path: %@", NSHomeDirectory());
     
     return YES;
 }

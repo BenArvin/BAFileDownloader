@@ -50,6 +50,9 @@
 //    task.URL = @"http://speed.myzone.cn/pc_elive_1.1.rar";
 //    task.URL = @"http://zkres.myzaker.com/img_upload/editor/article_video/2016/10/27/14775491454394.mp4";
     task.inFragmentMode = YES;
+    task.finishedBlock = ^(NSString *URL, NSString *filePath, NSError *error) {
+        NSLog(@"-----------  download finished");
+    };
 
     [BAFileDownloader addTask:task];
     [BAFileDownloader startTasksWithURL:task.URL];

@@ -8,6 +8,9 @@
 
 #import <Foundation/Foundation.h>
 
+/**
+ thread safe
+ */
 @interface BAStreamFileMerger : NSObject
 
 + (void)mergeFiles:(NSArray <NSString *> *)slicesPaths into:(NSString *)targetPath finishedBlock:(void(^)(NSError *error))finishedBlock;

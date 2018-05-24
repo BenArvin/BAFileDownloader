@@ -10,6 +10,9 @@
 
 @interface BAFileDownloaderSession : NSObject
 
-+ (NSURLSession *)sharedSession;
++ (BAFileDownloaderSession *)sharedSession;
+
+- (void)startDataTask:(NSMutableURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
+- (void)startDownloadTask:(NSMutableURLRequest *)request completionHandler:(void (^)(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
 
 @end

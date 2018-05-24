@@ -23,6 +23,7 @@
 		2598C9BD1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m in Sources */ = {isa = PBXBuildFile; fileRef = 2598C9BC1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m */; };
 		25B773601FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m in Sources */ = {isa = PBXBuildFile; fileRef = 25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */; };
 		25C1BEE41FDFCA3000BC29BE /* BAStreamFileMerger.m in Sources */ = {isa = PBXBuildFile; fileRef = 25C1BEE31FDFCA3000BC29BE /* BAStreamFileMerger.m */; };
+		E427467620B266C90017331D /* BAFileDownloaderThreads.m in Sources */ = {isa = PBXBuildFile; fileRef = E427467520B266C90017331D /* BAFileDownloaderThreads.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +77,8 @@
 		25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSError+BAFileDownloaderCategory.m"; sourceTree = "<group>"; };
 		25C1BEE21FDFCA2400BC29BE /* BAStreamFileMerger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAStreamFileMerger.h; sourceTree = "<group>"; };
 		25C1BEE31FDFCA3000BC29BE /* BAStreamFileMerger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAStreamFileMerger.m; sourceTree = "<group>"; };
+		E427467420B266BE0017331D /* BAFileDownloaderThreads.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloaderThreads.h; sourceTree = "<group>"; };
+		E427467520B266C90017331D /* BAFileDownloaderThreads.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloaderThreads.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -172,6 +175,8 @@
 				2598C9BC1FD13B6D00B16D77 /* BAFileDownloaderLocalCache.m */,
 				25946AEF1FD7D61300820BF4 /* BAFileDownloaderSession.h */,
 				25946AF01FD7D61C00820BF4 /* BAFileDownloaderSession.m */,
+				E427467420B266BE0017331D /* BAFileDownloaderThreads.h */,
+				E427467520B266C90017331D /* BAFileDownloaderThreads.m */,
 				25C1BEE61FDFCA9B00BC29BE /* BAKit */,
 			);
 			path = BAFileDownloaderKit;
@@ -324,6 +329,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2591439D1FD00B7A0061FDF1 /* ViewController.m in Sources */,
+				E427467620B266C90017331D /* BAFileDownloaderThreads.m in Sources */,
 				2598C9B71FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m in Sources */,
 				25946AF11FD7D61C00820BF4 /* BAFileDownloaderSession.m in Sources */,
 				2598C9BA1FD13A8A00B16D77 /* BAFileDownloadOperation.m in Sources */,
