@@ -8,11 +8,17 @@
 
 #import <Foundation/Foundation.h>
 
+typedef void(^BAFileDownloaderDataTaskFinishedBlock)(NSURLResponse *response, NSError *error);
+typedef void(^BAFileDownloaderDownloadTaskFinishedBlock)(NSURL *location, NSError *error);
+typedef void(^BAFileDownloaderDownloadTaskProgressBlock)(NSUInteger finished, NSUInteger totalFinished, NSUInteger totalExpected);
+
 @interface BAFileDownloaderSession : NSObject
 
 + (BAFileDownloaderSession *)sharedSession;
 
-- (void)startDataTask:(NSMutableURLRequest *)request completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
-- (void)startDownloadTask:(NSMutableURLRequest *)request completionHandler:(void (^)(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler;
+- (void)startDataTask:(NSMutableURLRequest *)request completionHandler:(BAFileDownloaderDataTaskFinishedBlock)completionHandler;
+- (void)startDownloadTask:(NSMutableURLRequest *)request
+          progressHandler:(BAFileDownloaderDownloadTaskProgressBlock)progressHandler
+        completionHandler:(BAFileDownloaderDownloadTaskFinishedBlock)completionHandler;
 
 @end

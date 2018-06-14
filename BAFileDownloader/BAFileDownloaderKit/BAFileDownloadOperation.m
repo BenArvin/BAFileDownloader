@@ -24,6 +24,7 @@
 @property (nonatomic) NSString *fileMD5;
 @property (nonatomic) BOOL inFragmentMode;
 @property (nonatomic) NSUInteger fragmentSize;
+@property (nonatomic) NSUInteger finishedLength;
 
 @property (nonatomic) NSError *operationError;
 
@@ -43,6 +44,24 @@
         _fragmentSize = 1024 * 10;
     }
     return self;
+}
+
+#pragma mark - property methods
+- (void)setFinishedLength:(NSUInteger)finishedLength
+{
+    if (_finishedLength != finishedLength) {
+        _finishedLength = finishedLength;
+        NSUInteger fullDataLength = [self.localCache getFullDataLength];
+        for (BAFileDownloadTask *task in self.tasks) {
+            if (task.progressBlock) {
+                __weak typeof(self) weakSelf = self;
+                [[BAFileDownloaderThreads outputQueue] addOperationWithBlock:^(){
+                    __strong typeof(weakSelf) strongSelf = weakSelf;
+                    task.progressBlock(strongSelf.URL, finishedLength, fullDataLength);
+                }];
+            }
+        }
+    }
 }
 
 #pragma mark - public method
@@ -118,7 +137,7 @@
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:self.URL]];
     request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
     request.HTTPMethod = @"HEAD";
-    [[BAFileDownloaderSession sharedSession] startDataTask:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+    [[BAFileDownloaderSession sharedSession] startDataTask:request completionHandler:^(NSURLResponse *response, NSError *error) {
         BOOL acceptRanges = NO;
         NSInteger contentLength = 0;
         NSError *responseError = nil;
@@ -153,27 +172,33 @@
         [self operationFinished];
         return;
     }
-    //2.start download slices
+    //2.get downloaded data length
+    self.finishedLength = [self.localCache getCachedSliceLength];
+    
+    //3.start download slices
     __block NSInteger count = sliceRanges.count;
     for (NSString *rangeString in sliceRanges) {
         NSRange range = NSRangeFromString(rangeString);
         
-        //3.build net request for each slice
+        //4.build net request for each slice
         NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:self.URL]];
         [request setValue:[NSString stringWithFormat:@"Bytes=%lu-%lu", range.location, range.location + range.length] forHTTPHeaderField:@"Range"];
         
-        //4.start net request
+        //5.start net request
         __weak typeof(self) weakSelf1 = self;
-        [[BAFileDownloaderSession sharedSession] startDownloadTask:request completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        [[BAFileDownloaderSession sharedSession] startDownloadTask:request progressHandler:^(NSUInteger finished, NSUInteger totalFinished, NSUInteger totalExpected) {
             __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
-            //5.copy tmp file from NSURLSession tmp files path to sand box synchronized, in case tmp file removed
+            [strongSelf1 updateProgress:finished totalFinished:totalFinished totalExpected:totalExpected];
+        } completionHandler:^(NSURL *location, NSError *error) {
+            __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
+            //6.copy tmp file from NSURLSession tmp files path to sand box synchronized, in case tmp file removed
             NSString *netResponseTmpFilePath = nil;
             if (!error && location) {
                 netResponseTmpFilePath = location.relativePath;
             }
             NSString *cachedTmpFilePath = [strongSelf1.localCache cacheNetResponseTmpSliceData:netResponseTmpFilePath sliceRange:range];
             
-            //6.save net response
+            //7.save net response
             __weak typeof(strongSelf1) weakSelf2 = strongSelf1;
             [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^() {
                 __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
@@ -181,12 +206,27 @@
                 count--;
                 strongSelf2.operationError = saveActionError;
                 if (count == 0) {
-                    //7.operation finished if all requsets finished
+                    //8.operation finished if all requsets finished
+                    [strongSelf2 updateProgressWhenOperationFinished];
                     [strongSelf2 operationFinished];
                 }
             }];
         }];
     }
+}
+
+#pragma mark progress methods
+- (void)updateProgress:(NSUInteger)finished totalFinished:(NSUInteger)totalFinished totalExpected:(NSUInteger)totalExpected
+{
+    //last one byte of slice is file ending flag
+    NSUInteger finishedLengthTmp = (totalFinished == totalExpected ? finished - 1 : finished);
+    self.finishedLength = self.finishedLength + finishedLengthTmp;
+}
+
+- (void)updateProgressWhenOperationFinished
+{
+    //last one byte of last slice is needed
+    self.finishedLength = self.finishedLength + 1;
 }
 
 #pragma mark others

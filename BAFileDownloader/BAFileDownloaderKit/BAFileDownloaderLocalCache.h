@@ -25,6 +25,8 @@ typedef NS_ENUM(NSUInteger, BAFileDownloaderLocalCacheState) {
 - (BAFileDownloaderLocalCacheState)state;
 - (NSError *)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize;
 
+- (NSUInteger)getFullDataLength;
+- (NSUInteger)getCachedSliceLength;
 - (NSArray *)getUncachedSliceRanges;
 - (NSArray *)getFailedSliceRanges;
 - (NSString *)cacheNetResponseTmpSliceData:(NSString *)dataPath sliceRange:(NSRange)sliceRange;

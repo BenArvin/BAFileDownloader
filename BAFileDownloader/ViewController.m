@@ -50,6 +50,9 @@
 //    task.URL = @"http://speed.myzone.cn/pc_elive_1.1.rar";
 //    task.URL = @"http://zkres.myzaker.com/img_upload/editor/article_video/2016/10/27/14775491454394.mp4";
     task.inFragmentMode = YES;
+    task.progressBlock = ^(NSString *URL, NSUInteger finished, NSUInteger expected) {
+        NSLog(@"-----------  %ld %ld %f", finished, expected, (CGFloat)finished / (CGFloat)expected);
+    };
     task.finishedBlock = ^(NSString *URL, NSString *filePath, NSError *error) {
         NSLog(@"-----------  download finished");
     };

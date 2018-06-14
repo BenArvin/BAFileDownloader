@@ -13,7 +13,7 @@ typedef void (^BAFileDownloadStartedBlock)(NSString *URL);
 typedef void (^BAFileDownloadPausedBlock)(NSString *URL);
 typedef void (^BAFileDownloadResumedBlock)(NSString *URL);
 typedef void (^BAFileDownloadFinishedBlock)(NSString *URL, NSString *filePath, NSError *error);
-typedef void (^BAFileDownloadProgressBlock)(NSString *URL, CGFloat progress);
+typedef void (^BAFileDownloadProgressBlock)(NSString *URL, NSUInteger finished, NSUInteger expected);
 
 @interface BAFileDownloadTask : NSObject
 
