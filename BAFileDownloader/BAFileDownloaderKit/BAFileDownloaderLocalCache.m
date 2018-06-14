@@ -212,7 +212,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
         BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
         [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateError) forKey:NSStringFromRange(sliceRange)];
         [self updateCacheInfo:cacheInfo];
-        return nil;
+        return error;
     } else {
         if ([self isPathExist:dataPath]) {
             //3.copy slice data file from sand box path to given path

@@ -14,6 +14,8 @@
 #import "BAFileDownloaderLocalCache.h"
 #import "BAFileDownloaderThreads.h"
 
+#define TIMES_FAILED_RETRY 3
+
 @interface BAFileDownloadOperation()
 
 @property (atomic) BOOL running;
@@ -26,6 +28,7 @@
 @property (nonatomic) NSUInteger fragmentSize;
 @property (nonatomic) NSUInteger finishedLength;
 
+@property (nonatomic) NSInteger retryingTime;
 @property (nonatomic) NSError *operationError;
 
 @property (nonatomic) NSMutableArray *tasks;
@@ -40,6 +43,7 @@
     if (self) {
         _tasks = [[NSMutableArray alloc] init];
         
+        _retryingTime = 0;
         _inFragmentMode = YES;
         _fragmentSize = 1024 * 10;
     }
@@ -95,6 +99,8 @@
         return;
     }
     self.running = YES;
+    self.retryingTime = self.retryingTime + 1;
+    self.operationError = nil;
     if (self.localCache.state == BAFileDownloaderLocalCacheStateNull) {
         //1.get full content length & accept ranges?
         __weak typeof(self) weakSelf1 = self;
@@ -107,6 +113,7 @@
                 [strongSelf1 downloadAndCacheSlicesData];
             } else {
                 strongSelf1.operationError = error;
+                [strongSelf1 operationFinished];
             }
         }];
     } else if (self.localCache.state == BAFileDownloaderLocalCacheStatePart) {
@@ -142,15 +149,21 @@
         NSInteger contentLength = 0;
         NSError *responseError = nil;
         if (!error && [response isKindOfClass:[NSHTTPURLResponse class]]) {
-            NSDictionary *result = ((NSHTTPURLResponse *)response).allHeaderFields;
-            if (result) {
-                NSString *acceptRangesString = [result objectForKey:@"Accept-Ranges"];
-                if (acceptRangesString) {
-                    acceptRanges = ([acceptRangesString rangeOfString:@"bytes"].location != NSNotFound);
-                }
-                contentLength = ((NSNumber *)[result objectForKey:@"Content-Length"]).integerValue;
+            NSHTTPURLResponse *responseTmp = (NSHTTPURLResponse *)response;
+            NSInteger statusCode = [responseTmp statusCode];
+            if (statusCode != 200) {
+                responseError = [NSError BAFD_simpleErrorWithDescription:[NSString stringWithFormat:@"response code %ld", statusCode]];
             } else {
-                error = [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"];
+                NSDictionary *result = responseTmp.allHeaderFields;
+                if (result) {
+                    NSString *acceptRangesString = [result objectForKey:@"Accept-Ranges"];
+                    if (acceptRangesString) {
+                        acceptRanges = ([acceptRangesString rangeOfString:@"bytes"].location != NSNotFound);
+                    }
+                    contentLength = ((NSNumber *)[result objectForKey:@"Content-Length"]).integerValue;
+                } else {
+                    error = [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"];
+                }
             }
         } else {
             responseError = error ? error : [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"];
@@ -232,6 +245,14 @@
 #pragma mark others
 - (void)operationFinished
 {
+    [self pause];
+    if (self.operationError || self.localCache.state != BAFileDownloaderLocalCacheStateFull) {
+        if (self.retryingTime < TIMES_FAILED_RETRY) {
+            //retry
+            [self start];
+            return;
+        }
+    }
     for (BAFileDownloadTask *task in self.tasks) {
         if (task.finishedBlock) {
             __weak typeof(self) weakSelf = self;
