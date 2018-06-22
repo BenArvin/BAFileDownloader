@@ -46,10 +46,10 @@
 {
     BAFileDownloadTask *task = [[BAFileDownloadTask alloc] init];
 //    task.URL = @"http://sqdownb.onlinedown.net/down/WinRAR560.rar";
-    task.fragmentSize = 1000 * 10;
+    task.sliceSize = 1000 * 10;
 //    task.URL = @"http://speed.myzone.cn/pc_elive_1.1.rar";
     task.URL = @"http://zkres.myzaker.com/img_upload/editor/article_video/2016/10/27/14775491454394.mp4";
-    task.inFragmentMode = YES;
+    task.useSliceMode = YES;
     task.progressBlock = ^(NSString *URL, NSUInteger finished, NSUInteger expected) {
         NSLog(@"-----------  %ld %ld %f", finished, expected, (CGFloat)finished / (CGFloat)expected);
     };

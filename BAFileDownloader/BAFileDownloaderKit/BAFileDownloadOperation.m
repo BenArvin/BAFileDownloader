@@ -24,8 +24,8 @@
 
 @property (nonatomic, readwrite) NSString *URL;
 @property (nonatomic) NSString *fileMD5;
-@property (nonatomic) BOOL inFragmentMode;
-@property (nonatomic) NSUInteger fragmentSize;
+@property (nonatomic) BOOL useSliceMode;
+@property (nonatomic) NSUInteger sliceSize;
 @property (nonatomic) NSUInteger finishedLength;
 
 @property (nonatomic) NSInteger retryingTime;
@@ -44,8 +44,8 @@
         _tasks = [[NSMutableArray alloc] init];
         
         _retryingTime = 0;
-        _inFragmentMode = YES;
-        _fragmentSize = 1024 * 10;
+        _useSliceMode = YES;
+        _sliceSize = 1024 * 10;
     }
     return self;
 }
@@ -77,8 +77,8 @@
     if (self.tasks.count == 0) {
         self.URL = task.URL;
         self.fileMD5 = task.fileMD5;
-        self.inFragmentMode = task.inFragmentMode;
-        self.fragmentSize = task.fragmentSize;
+        self.useSliceMode = task.useSliceMode;
+        self.sliceSize = task.sliceSize;
         
         self.localCache = [[BAFileDownloaderLocalCache alloc] initWithURL:task.URL];
     }
@@ -108,7 +108,7 @@
             __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
             if (!error) {
                 //2.update cache info & build slice sheet
-                [strongSelf1.localCache updateSlicesSheet:contentLength sliceSize:(strongSelf1.inFragmentMode && acceptRanges) ? strongSelf1.fragmentSize : contentLength];
+                [strongSelf1.localCache updateSlicesSheet:contentLength sliceSize:(strongSelf1.useSliceMode && acceptRanges) ? strongSelf1.sliceSize : contentLength];
                 //3.download & cache slices
                 [strongSelf1 downloadAndCacheSlicesData];
             } else {

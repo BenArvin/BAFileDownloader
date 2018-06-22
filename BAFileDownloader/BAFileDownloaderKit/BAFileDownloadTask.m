@@ -17,8 +17,8 @@
 {
     self =  [super init];
     if (self) {
-        self.inFragmentMode = YES;
-        self.fragmentSize = 1024 * 10;
+        self.useSliceMode = YES;
+        self.sliceSize = 1024 * 10;
     }
     return self;
 }

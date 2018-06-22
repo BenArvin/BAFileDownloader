@@ -19,8 +19,8 @@ typedef void (^BAFileDownloadProgressBlock)(NSString *URL, NSUInteger finished, 
 
 @property (nonatomic, copy) NSString *URL;
 @property (nonatomic, copy) NSString *fileMD5;
-@property (nonatomic, assign) BOOL inFragmentMode;//default YES
-@property (nonatomic, assign) NSUInteger fragmentSize;//default 1024*10 Byte
+@property (nonatomic, assign) BOOL useSliceMode;//default YES
+@property (nonatomic, assign) NSUInteger sliceSize;//default 1024*10 Byte
 
 
 @property (nonatomic, copy) BAFileDownloadStartedBlock startedBlock;
