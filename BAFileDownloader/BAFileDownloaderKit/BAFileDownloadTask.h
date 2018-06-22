@@ -10,8 +10,8 @@
 #import <CoreGraphics/CoreGraphics.h>
 
 typedef void (^BAFileDownloadStartedBlock)(NSString *URL);
-typedef void (^BAFileDownloadPausedBlock)(NSString *URL);
-typedef void (^BAFileDownloadResumedBlock)(NSString *URL);
+//typedef void (^BAFileDownloadPausedBlock)(NSString *URL);
+//typedef void (^BAFileDownloadResumedBlock)(NSString *URL);
 typedef void (^BAFileDownloadFinishedBlock)(NSString *URL, NSString *filePath, NSError *error);
 typedef void (^BAFileDownloadProgressBlock)(NSString *URL, NSUInteger finished, NSUInteger expected);
 
@@ -22,10 +22,9 @@ typedef void (^BAFileDownloadProgressBlock)(NSString *URL, NSUInteger finished, 
 @property (nonatomic, assign) BOOL useSliceMode;//default YES
 @property (nonatomic, assign) NSUInteger sliceSize;//default 1024*10 Byte
 
-
 @property (nonatomic, copy) BAFileDownloadStartedBlock startedBlock;
-@property (nonatomic, copy) BAFileDownloadPausedBlock pausedBlock;
-@property (nonatomic, copy) BAFileDownloadResumedBlock resumedBlock;
+//@property (nonatomic, copy) BAFileDownloadPausedBlock pausedBlock;
+//@property (nonatomic, copy) BAFileDownloadResumedBlock resumedBlock;
 @property (nonatomic, copy) BAFileDownloadFinishedBlock finishedBlock;
 
 @property (nonatomic, copy) BAFileDownloadProgressBlock progressBlock;
