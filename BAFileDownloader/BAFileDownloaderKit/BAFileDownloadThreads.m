@@ -1,14 +1,14 @@
 //
-//  BAFileDownloaderThreads.m
+//  BAFileDownloadThreads.m
 //  BAFileDownloader
 //
 //  Created by BenArvin on 2018/5/21.
 //  Copyright © 2018年 nds. All rights reserved.
 //
 
-#import "BAFileDownloaderThreads.h"
+#import "BAFileDownloadThreads.h"
 
-@implementation BAFileDownloaderThreads
+@implementation BAFileDownloadThreads
 
 + (NSOperationQueue *)actionQueue
 {

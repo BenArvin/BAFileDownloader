@@ -1,5 +1,5 @@
 //
-//  BAFileDownloaderSession.h
+//  BAFileDownloadSession.h
 //  BAFileDownloader
 //
 //  Created by nds on 2017/12/6.
@@ -12,9 +12,9 @@ typedef void(^BAFileDownloaderDataTaskFinishedBlock)(NSURLResponse *response, NS
 typedef void(^BAFileDownloaderDownloadTaskFinishedBlock)(NSURL *location, NSError *error);
 typedef void(^BAFileDownloaderDownloadTaskProgressBlock)(NSUInteger finished, NSUInteger totalFinished, NSUInteger totalExpected);
 
-@interface BAFileDownloaderSession : NSObject
+@interface BAFileDownloadSession : NSObject
 
-+ (BAFileDownloaderSession *)sharedSession;
++ (BAFileDownloadSession *)sharedSession;
 
 - (void)startDataTask:(NSMutableURLRequest *)request completionHandler:(BAFileDownloaderDataTaskFinishedBlock)completionHandler;
 - (void)startDownloadTask:(NSMutableURLRequest *)request

@@ -1,15 +1,15 @@
 //
-//  BAFileDownloaderSession.m
+//  BAFileDownloadSession.m
 //  BAFileDownloader
 //
 //  Created by nds on 2017/12/6.
 //  Copyright © 2017年 nds. All rights reserved.
 //
 
-#import "BAFileDownloaderSession.h"
-#import "BAFileDownloaderThreads.h"
+#import "BAFileDownloadSession.h"
+#import "BAFileDownloadThreads.h"
 
-@interface BAFileDownloaderSession() <NSURLSessionDelegate, NSURLSessionDownloadDelegate, NSURLSessionDataDelegate>
+@interface BAFileDownloadSession() <NSURLSessionDelegate, NSURLSessionDownloadDelegate, NSURLSessionDataDelegate>
 
 @property (nonatomic) NSURLSession *session;
 @property (nonatomic) NSMutableDictionary *taskHandlerDic;
@@ -17,7 +17,7 @@
 
 @end
 
-@implementation BAFileDownloaderSession
+@implementation BAFileDownloadSession
 
 - (void)dealloc
 {
@@ -32,18 +32,18 @@
     if (self) {
         _taskHandlerDic = [[NSMutableDictionary alloc] init];
         _lock = [[NSRecursiveLock alloc] init];
-        _session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:[BAFileDownloaderThreads networkQueue]];
+        _session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:[BAFileDownloadThreads networkQueue]];
     }
     return self;
 }
 
 #pragma mark - public method
-+ (BAFileDownloaderSession *)sharedSession
++ (BAFileDownloadSession *)sharedSession
 {
     static dispatch_once_t onceToken;
-    static BAFileDownloaderSession *_sharedSession;
+    static BAFileDownloadSession *_sharedSession;
     dispatch_once(&onceToken, ^{
-        _sharedSession = [[BAFileDownloaderSession alloc] init];
+        _sharedSession = [[BAFileDownloadSession alloc] init];
     });
     return _sharedSession;
 }
@@ -51,7 +51,7 @@
 - (void)startDataTask:(NSMutableURLRequest *)request completionHandler:(BAFileDownloaderDataTaskFinishedBlock)completionHandler
 {
     __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads networkQueue] addOperationWithBlock:^() {
+    [[BAFileDownloadThreads networkQueue] addOperationWithBlock:^() {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         NSURLSessionDataTask *sessionTask = [strongSelf.session dataTaskWithRequest:request];
         [strongSelf record:sessionTask completionHandler:completionHandler];
@@ -64,7 +64,7 @@
         completionHandler:(BAFileDownloaderDownloadTaskFinishedBlock)completionHandler
 {
     __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads networkQueue] addOperationWithBlock:^() {
+    [[BAFileDownloadThreads networkQueue] addOperationWithBlock:^() {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         NSURLSessionDownloadTask *sessionTask = [strongSelf.session downloadTaskWithRequest:request];
         [strongSelf record:sessionTask progressHandler:progressHandler];

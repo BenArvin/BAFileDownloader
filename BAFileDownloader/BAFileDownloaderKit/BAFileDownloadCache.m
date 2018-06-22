@@ -1,12 +1,12 @@
 //
-//  BAFileDownloaderLocalCache.m
+//  BAFileDownloadCache.m
 //  BAFileDownloader
 //
 //  Created by nds on 2017/12/1.
 //  Copyright © 2017年 nds. All rights reserved.
 //
 
-#import "BAFileDownloaderLocalCache.h"
+#import "BAFileDownloadCache.h"
 #import "NSString+BAFileDownloaderCategory.h"
 #import <CoreGraphics/CoreGraphics.h>
 #import "BAStreamFileMerger.h"
@@ -29,9 +29,9 @@ static NSString *const BAFileLocalCacheInfoKeySlicesRecord = @"slices_record";
 static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
 static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_length";
 
-@interface BAFileDownloaderLocalCacheInfo : NSObject
+@interface BAFileDownloadCacheInfo : NSObject
 
-@property (nonatomic) BAFileDownloaderLocalCacheState state;
+@property (nonatomic) BAFileDownloadCacheState state;
 @property (nonatomic) NSString *fileMD5;
 @property (nonatomic) NSMutableDictionary *slicesRecord;//key: range(e.g: 0-100), value: slice data file path
 @property (nonatomic) NSString *fullDataPath;
@@ -39,13 +39,13 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 @end
 
-@implementation BAFileDownloaderLocalCacheInfo
+@implementation BAFileDownloadCacheInfo
 
 - (instancetype)init
 {
     self = [super init];
     if (self) {
-        _state = BAFileDownloaderLocalCacheStateNull;
+        _state = BAFileDownloadCacheStateNull;
         _slicesRecord = [[NSMutableDictionary alloc] init];
     }
     return self;
@@ -94,14 +94,14 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 @end
 
-@interface BAFileDownloaderLocalCache()
+@interface BAFileDownloadCache()
 
 @property (nonatomic) NSString *URL;
-@property (nonatomic) BAFileDownloaderLocalCacheInfo *tmpCacheInfo;
+@property (nonatomic) BAFileDownloadCacheInfo *tmpCacheInfo;
 
 @end
 
-@implementation BAFileDownloaderLocalCache
+@implementation BAFileDownloadCache
 
 - (instancetype)initWithURL:(NSString *)URL
 {
@@ -119,7 +119,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 #pragma mark - public method
 
-- (BAFileDownloaderLocalCacheState)state
+- (BAFileDownloadCacheState)state
 {
     return [self cacheInfo].state;
 }
@@ -136,9 +136,9 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
         }
         [newSlicesRecord setObject:@(BAFileLocalCacheSliceStateNull) forKey:NSStringFromRange(NSMakeRange(location, destination - location))];
     }
-    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
     if (!cacheInfo) {
-        cacheInfo = [[BAFileDownloaderLocalCacheInfo alloc] init];
+        cacheInfo = [[BAFileDownloadCacheInfo alloc] init];
     }
     cacheInfo.fullDataLength = fullDataLength;
     cacheInfo.slicesRecord = newSlicesRecord;
@@ -154,7 +154,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 - (NSUInteger)getCachedSliceLength
 {
     NSUInteger result = 0;
-    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
     for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
         BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
         if (BAFileLocalCacheSliceStateSuccessed == state) {
@@ -168,7 +168,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 - (NSArray *)getUncachedSliceRanges
 {
     NSMutableArray *result = nil;
-    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
     for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
         BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
         if (BAFileLocalCacheSliceStateNull == state || BAFileLocalCacheSliceStateError == state) {
@@ -184,7 +184,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 - (NSArray *)getFailedSliceRanges
 {
     NSMutableArray *result = nil;
-    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
     for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
         if (BAFileLocalCacheSliceStateError == ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue) {
             if (!result) {
@@ -211,7 +211,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 {
     NSString *rangeString = NSStringFromRange(sliceRange);
     if (error) {
-        BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+        BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
         [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateError) forKey:NSStringFromRange(sliceRange)];
         [self updateCacheInfo:cacheInfo];
         return error;
@@ -220,12 +220,12 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
             //3.copy slice data file from sand box path to given path
             NSString *slicePath = [self cachedSliceDataPathWithSliceFlag:rangeString];
             [self moveFileFrom:dataPath to:slicePath overWrite:YES];
-            BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+            BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
             [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateSuccessed) forKey:rangeString];
             
             NSArray *allValues = [cacheInfo.slicesRecord allValues];
-            BAFileDownloaderLocalCacheState tmpState = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloaderLocalCacheStatePart : BAFileDownloaderLocalCacheStateFull;
-            if (tmpState == BAFileDownloaderLocalCacheStateFull) {
+            BAFileDownloadCacheState tmpState = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloadCacheStatePart : BAFileDownloadCacheStateFull;
+            if (tmpState == BAFileDownloadCacheStateFull) {
                 //4.merge all slices if all of it saved
                 __block NSError *tmpError = nil;
                 dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
@@ -237,7 +237,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
                 
                 //5.update cache info
                 if (!tmpError) {
-                    cacheInfo.state = BAFileDownloaderLocalCacheStateFull;
+                    cacheInfo.state = BAFileDownloadCacheStateFull;
                     [self updateCacheInfo:cacheInfo];
                     [self removeFilesAtPath:[self slicesPoolPath]];
                     [self createDirectoryAtPath:[self slicesPoolPath]];
@@ -256,7 +256,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 - (NSString *)fullDataPath
 {
-    return [self cacheInfo].state == BAFileDownloaderLocalCacheStateFull ? [self cachedFullDataPath] : nil;
+    return [self cacheInfo].state == BAFileDownloadCacheStateFull ? [self cachedFullDataPath] : nil;
 }
 
 - (void)cleanCache
@@ -266,7 +266,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 #pragma mark - private method
 #pragma mark cache info method
-- (BAFileDownloaderLocalCacheInfo *)cacheInfo
+- (BAFileDownloadCacheInfo *)cacheInfo
 {
     if (![self.URL BAFD_isValid]) {
         return nil;
@@ -279,7 +279,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
     if ([self isPathExist:cacheInfoPath]) {
         NSDictionary *dic = [NSDictionary dictionaryWithContentsOfFile:cacheInfoPath];
         if (dic) {
-            self.tmpCacheInfo = [[BAFileDownloaderLocalCacheInfo alloc] initWithDictionary:dic];
+            self.tmpCacheInfo = [[BAFileDownloadCacheInfo alloc] initWithDictionary:dic];
             return self.tmpCacheInfo;
         } else {
             [self removeFilesAtPath:folderPath];
@@ -292,7 +292,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
     }
 }
 
-- (void)updateCacheInfo:(BAFileDownloaderLocalCacheInfo *)newInfo
+- (void)updateCacheInfo:(BAFileDownloadCacheInfo *)newInfo
 {
     if (![self.URL BAFD_isValid]) {
         return;
@@ -415,7 +415,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 #pragma mark slice method
 - (void)mergeAllSlicesDataWithFinishedBlock:(void(^)(NSError *error))finishedBlock
 {
-    BAFileDownloaderLocalCacheInfo *cacheInfo = [self cacheInfo];
+    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
     if (!cacheInfo) {
         if (finishedBlock) {
             finishedBlock([NSError BAFD_simpleErrorWithDescription:@"cache is null"]);

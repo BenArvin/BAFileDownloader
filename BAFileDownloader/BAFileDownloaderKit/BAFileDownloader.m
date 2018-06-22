@@ -10,7 +10,7 @@
 #import "BAFileDownloadTask.h"
 #import "BAFileDownloadOperation.h"
 #import "NSString+BAFileDownloaderCategory.h"
-#import "BAFileDownloaderThreads.h"
+#import "BAFileDownloadThreads.h"
 
 @interface BAFileDownloader()<BAFileDownloadOperationDelegate>
 
@@ -64,7 +64,7 @@
 - (void)addTask:(BAFileDownloadTask *)task
 {
     __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
+    [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!task || ![task.URL BAFD_isValid]) {
             return;
@@ -83,7 +83,7 @@
 - (void)removeTask:(BAFileDownloadTask *)task
 {
     __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
+    [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!task || ![task.URL BAFD_isValid]) {
             return;
@@ -97,7 +97,7 @@
 - (void)startTasksWithURL:(NSString *)URL
 {
     __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
+    [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (![URL BAFD_isValid]) {
             return;
@@ -111,7 +111,7 @@
 //- (void)pauseTasksWithURL:(NSString *)URL
 //{
 //    __weak typeof(self) weakSelf = self;
-//    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
+//    [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^{
 //        __strong typeof(weakSelf) strongSelf = weakSelf;
 //        if (![URL BAFD_isValid]) {
 //            return;
@@ -126,7 +126,7 @@
 - (void)fileDownloadOperation:(BAFileDownloadOperation *)operation finished:(NSError *)error
 {
     __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
+    [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^{
         __strong typeof(weakSelf) strongSelf = weakSelf;
         [strongSelf.operationsDic removeObjectForKey:[operation.URL BAFD_MD5]];
     }];

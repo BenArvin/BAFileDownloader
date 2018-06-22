@@ -1,5 +1,5 @@
 //
-//  BAFileDownloaderLocalCache.h
+//  BAFileDownloadCache.h
 //  BAFileDownloader
 //
 //  Created by nds on 2017/12/1.
@@ -8,21 +8,21 @@
 
 #import <Foundation/Foundation.h>
 
-typedef NS_ENUM(NSUInteger, BAFileDownloaderLocalCacheState) {
-    BAFileDownloaderLocalCacheStateNull = 0,
-    BAFileDownloaderLocalCacheStatePart,
-    BAFileDownloaderLocalCacheStateFull,
+typedef NS_ENUM(NSUInteger, BAFileDownloadCacheState) {
+    BAFileDownloadCacheStateNull = 0,
+    BAFileDownloadCacheStatePart,
+    BAFileDownloadCacheStateFull,
 };
 
 
 /**
  non-thread safe
  */
-@interface BAFileDownloaderLocalCache : NSObject
+@interface BAFileDownloadCache : NSObject
 
 - (instancetype)initWithURL:(NSString *)URL;
 
-- (BAFileDownloaderLocalCacheState)state;
+- (BAFileDownloadCacheState)state;
 - (NSError *)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize;
 
 - (NSUInteger)getFullDataLength;

@@ -1,5 +1,5 @@
 //
-//  BAFileDownloaderThreads.h
+//  BAFileDownloadThreads.h
 //  BAFileDownloader
 //
 //  Created by BenArvin on 2018/5/21.
@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
-@interface BAFileDownloaderThreads: NSObject
+@interface BAFileDownloadThreads: NSObject
 
 + (NSOperationQueue *)actionQueue;
 + (NSOperationQueue *)networkQueue;

@@ -9,10 +9,10 @@
 #import "BAFileDownloadOperation.h"
 #import "BAFileDownloadTask.h"
 #import "NSString+BAFileDownloaderCategory.h"
-#import "BAFileDownloaderSession.h"
+#import "BAFileDownloadSession.h"
 #import "NSError+BAFileDownloaderCategory.h"
-#import "BAFileDownloaderLocalCache.h"
-#import "BAFileDownloaderThreads.h"
+#import "BAFileDownloadCache.h"
+#import "BAFileDownloadThreads.h"
 
 #define TIMES_FAILED_RETRY 3
 
@@ -20,7 +20,7 @@
 
 @property (atomic) BOOL running;
 
-@property (nonatomic) BAFileDownloaderLocalCache *localCache;
+@property (nonatomic) BAFileDownloadCache *localCache;
 
 @property (nonatomic, readwrite) NSString *URL;
 @property (nonatomic) NSString *fileMD5;
@@ -59,7 +59,7 @@
         for (BAFileDownloadTask *task in self.tasks) {
             if (task.progressBlock) {
                 __weak typeof(self) weakSelf = self;
-                [[BAFileDownloaderThreads outputQueue] addOperationWithBlock:^(){
+                [[BAFileDownloadThreads outputQueue] addOperationWithBlock:^(){
                     __strong typeof(weakSelf) strongSelf = weakSelf;
                     task.progressBlock(strongSelf.URL, finishedLength, fullDataLength);
                 }];
@@ -80,7 +80,7 @@
         self.useSliceMode = task.useSliceMode;
         self.sliceSize = task.sliceSize;
         
-        self.localCache = [[BAFileDownloaderLocalCache alloc] initWithURL:task.URL];
+        self.localCache = [[BAFileDownloadCache alloc] initWithURL:task.URL];
     }
     [self.tasks addObject:task];
 }
@@ -101,7 +101,7 @@
     self.running = YES;
     self.retryingTime = self.retryingTime + 1;
     self.operationError = nil;
-    if (self.localCache.state == BAFileDownloaderLocalCacheStateNull) {
+    if (self.localCache.state == BAFileDownloadCacheStateNull) {
         //1.get full content length & accept ranges?
         __weak typeof(self) weakSelf1 = self;
         [self getRemoteResourceInfoForURL:self.URL finishedBlock:^(BOOL acceptRanges, NSInteger contentLength, NSError *error) {
@@ -116,7 +116,7 @@
                 [strongSelf1 operationFinished];
             }
         }];
-    } else if (self.localCache.state == BAFileDownloaderLocalCacheStatePart) {
+    } else if (self.localCache.state == BAFileDownloadCacheStatePart) {
         [self downloadAndCacheSlicesData];
     } else {
         [self operationFinished];
@@ -144,7 +144,7 @@
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:self.URL]];
     request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
     request.HTTPMethod = @"HEAD";
-    [[BAFileDownloaderSession sharedSession] startDataTask:request completionHandler:^(NSURLResponse *response, NSError *error) {
+    [[BAFileDownloadSession sharedSession] startDataTask:request completionHandler:^(NSURLResponse *response, NSError *error) {
         BOOL acceptRanges = NO;
         NSInteger contentLength = 0;
         NSError *responseError = nil;
@@ -169,7 +169,7 @@
             responseError = error ? error : [NSError BAFD_simpleErrorWithDescription:@"unrecognized response"];
         }
         if (finishedBlock) {
-            [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^() {
+            [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^() {
                 finishedBlock(acceptRanges, contentLength, responseError);
             }];
         }
@@ -199,7 +199,7 @@
         
         //5.start net request
         __weak typeof(self) weakSelf1 = self;
-        [[BAFileDownloaderSession sharedSession] startDownloadTask:request progressHandler:^(NSUInteger finished, NSUInteger totalFinished, NSUInteger totalExpected) {
+        [[BAFileDownloadSession sharedSession] startDownloadTask:request progressHandler:^(NSUInteger finished, NSUInteger totalFinished, NSUInteger totalExpected) {
             __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
             [strongSelf1 updateProgress:finished totalFinished:totalFinished totalExpected:totalExpected];
         } completionHandler:^(NSURL *location, NSError *error) {
@@ -213,7 +213,7 @@
             
             //7.save net response
             __weak typeof(strongSelf1) weakSelf2 = strongSelf1;
-            [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^() {
+            [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^() {
                 __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
                 NSError *saveActionError = [strongSelf2.localCache saveSliceData:cachedTmpFilePath error:error sliceRange:range];
                 count--;
@@ -246,7 +246,7 @@
 - (void)operationFinished
 {
     [self pause];
-    if (self.operationError || self.localCache.state != BAFileDownloaderLocalCacheStateFull) {
+    if (self.operationError || self.localCache.state != BAFileDownloadCacheStateFull) {
         if (self.retryingTime < TIMES_FAILED_RETRY) {
             //retry
             [self start];
@@ -256,7 +256,7 @@
     for (BAFileDownloadTask *task in self.tasks) {
         if (task.finishedBlock) {
             __weak typeof(self) weakSelf = self;
-            [[BAFileDownloaderThreads outputQueue] addOperationWithBlock:^(){
+            [[BAFileDownloadThreads outputQueue] addOperationWithBlock:^(){
                 __strong typeof(weakSelf) strongSelf = weakSelf;
                 task.finishedBlock(strongSelf.URL, [strongSelf.localCache fullDataPath], strongSelf.operationError);
             }];
