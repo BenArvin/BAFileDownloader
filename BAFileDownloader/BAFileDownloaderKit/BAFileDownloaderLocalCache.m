@@ -111,6 +111,8 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
         [self createDirectoryAtPath:[self cacheFolderPath]];
         [self createDirectoryAtPath:[self slicesPoolPath]];
         [self createDirectoryAtPath:[self tmpFilePoolPath]];
+        
+        [self skipiCloudBackup:[self rootPathOfCache]];
     }
     return self;
 }
@@ -442,6 +444,25 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
             finishedBlock(error);
         }
     }];
+}
+
+#pragma mark - icloud methods
+- (NSError *)skipiCloudBackup:(NSString *)path
+{
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        return [NSError BAFD_simpleErrorWithDescription:@"path invalid"];
+    }
+    NSURL *URL = [NSURL fileURLWithPath:path];
+    if (!URL) {
+        return [NSError BAFD_simpleErrorWithDescription:@"path invalid"];
+    }
+    NSError *error = nil;
+    BOOL success = [URL setResourceValue:[NSNumber numberWithBool:YES] forKey:NSURLIsExcludedFromBackupKey error:&error];
+    if(!success || error){
+        return error ? error : [NSError BAFD_simpleErrorWithDescription:@"failed"];
+    } else {
+        return nil;
+    }
 }
 
 @end
