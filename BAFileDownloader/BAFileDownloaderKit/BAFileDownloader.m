@@ -45,10 +45,10 @@
     [[BAFileDownloader sharedDownloader] startTasksWithURL:URL];
 }
 
-+ (void)pauseTasksWithURL:(NSString *)URL
-{
-    [[BAFileDownloader sharedDownloader] pauseTasksWithURL:URL];
-}
+//+ (void)pauseTasksWithURL:(NSString *)URL
+//{
+//    [[BAFileDownloader sharedDownloader] pauseTasksWithURL:URL];
+//}
 
 #pragma private method
 + (BAFileDownloader *)sharedDownloader
@@ -108,19 +108,19 @@
     }];
 }
 
-- (void)pauseTasksWithURL:(NSString *)URL
-{
-    __weak typeof(self) weakSelf = self;
-    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (![URL BAFD_isValid]) {
-            return;
-        }
-        NSString *key = [URL BAFD_MD5];
-        BAFileDownloadOperation *operation = [strongSelf.operationsDic objectForKey:key];
-        [operation pause];
-    }];
-}
+//- (void)pauseTasksWithURL:(NSString *)URL
+//{
+//    __weak typeof(self) weakSelf = self;
+//    [[BAFileDownloaderThreads actionQueue] addOperationWithBlock:^{
+//        __strong typeof(weakSelf) strongSelf = weakSelf;
+//        if (![URL BAFD_isValid]) {
+//            return;
+//        }
+//        NSString *key = [URL BAFD_MD5];
+//        BAFileDownloadOperation *operation = [strongSelf.operationsDic objectForKey:key];
+//        [operation pause];
+//    }];
+//}
 
 #pragma mark - BAFileDownloadOperationDelegate
 - (void)fileDownloadOperation:(BAFileDownloadOperation *)operation finished:(NSError *)error

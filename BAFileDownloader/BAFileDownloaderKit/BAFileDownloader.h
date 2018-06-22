@@ -16,6 +16,6 @@
 + (void)removeTask:(BAFileDownloadTask *)task;
 
 + (void)startTasksWithURL:(NSString *)URL;
-+ (void)pauseTasksWithURL:(NSString *)URL;
+//+ (void)pauseTasksWithURL:(NSString *)URL;
 
 @end

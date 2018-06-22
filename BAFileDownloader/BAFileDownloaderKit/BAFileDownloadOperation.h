@@ -26,6 +26,6 @@
 - (void)removeTask:(BAFileDownloadTask *)task;
 
 - (void)start;//async
-- (void)pause;//async
+//- (void)pause;//async
 
 @end
