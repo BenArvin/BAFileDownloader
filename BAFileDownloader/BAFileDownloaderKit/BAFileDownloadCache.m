@@ -11,6 +11,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import "BAStreamFileMerger.h"
 #import "NSError+BAFileDownloaderCategory.h"
+#import "BAStreamFileMD5.h"
 
 typedef NS_ENUM(NSUInteger, BAFileLocalCacheSliceState) {
     BAFileLocalCacheSliceStateNull = 0,
@@ -151,6 +152,11 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
     return [self cacheInfo].fullDataLength;
 }
 
+- (NSString *)getFullDataMD5
+{
+    return [self cacheInfo].fileMD5;
+}
+
 - (NSUInteger)getCachedSliceLength
 {
     NSUInteger result = 0;
@@ -235,7 +241,12 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
                 }];
                 dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
                 
-                //5.update cache info
+                //5.get md5 value
+                if (!tmpError) {
+                    cacheInfo.fileMD5 = [BAStreamFileMD5 md5:[self cachedFullDataPath]];
+                }
+                
+                //6.update cache info
                 if (!tmpError) {
                     cacheInfo.state = BAFileDownloadCacheStateFull;
                     [self updateCacheInfo:cacheInfo];

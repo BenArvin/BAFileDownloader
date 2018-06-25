@@ -15,7 +15,10 @@
 #pragma mark - public methods
 + (NSString *)md5:(NSString *)path
 {
-    return (__bridge_transfer NSString *)FileMD5HashCreateWithPath((__bridge CFStringRef)path, FileHashDefaultChunkSizeForReadingData);;
+    if (!path || path.length == 0) {
+        return nil;
+    }
+    return (__bridge_transfer NSString *)FileMD5HashCreateWithPath((__bridge CFStringRef)path, FileHashDefaultChunkSizeForReadingData);
 }
 
 #pragma mark - private methods

@@ -47,6 +47,7 @@
     BAFileDownloadTask *task = [[BAFileDownloadTask alloc] init];
 //    task.URL = @"http://sqdownb.onlinedown.net/down/WinRAR560.rar";
     task.sliceSize = 1000 * 10;
+//    task.fileMD5 = @"4c57023d048f664a2c915ef9551c5ed9";
 //    task.URL = @"http://speed.myzone.cn/pc_elive_1.1.rar";
     task.URL = @"http://zkres.myzaker.com/img_upload/editor/article_video/2016/10/27/14775491454394.mp4";
     task.useSliceMode = YES;

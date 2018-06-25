@@ -239,7 +239,7 @@
 - (void)updateProgressWhenOperationFinished
 {
     //last one byte of last slice is needed
-    self.finishedLength = self.finishedLength + 1;
+    self.finishedLength = [self.localCache getFullDataLength];
 }
 
 #pragma mark others
@@ -253,12 +253,19 @@
             return;
         }
     }
+    NSString *localFileMD5 = [self.localCache getFullDataMD5];
     for (BAFileDownloadTask *task in self.tasks) {
         if (task.finishedBlock) {
+            NSError *errorForCallback = self.operationError;
+            if (!errorForCallback) {
+                if (!localFileMD5 || (task.fileMD5 && ![task.fileMD5 isEqualToString:localFileMD5])) {
+                    errorForCallback = [NSError BAFD_simpleErrorWithDescription:@"md5 check failed!"];
+                }
+            }
             __weak typeof(self) weakSelf = self;
             [[BAFileDownloadThreads outputQueue] addOperationWithBlock:^(){
                 __strong typeof(weakSelf) strongSelf = weakSelf;
-                task.finishedBlock(strongSelf.URL, [strongSelf.localCache fullDataPath], strongSelf.operationError);
+                task.finishedBlock(strongSelf.URL, [strongSelf.localCache fullDataPath], errorForCallback);
             }];
         }
     }
