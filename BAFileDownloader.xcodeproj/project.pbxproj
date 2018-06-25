@@ -24,6 +24,7 @@
 		25B773601FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m in Sources */ = {isa = PBXBuildFile; fileRef = 25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */; };
 		25C1BEE41FDFCA3000BC29BE /* BAStreamFileMerger.m in Sources */ = {isa = PBXBuildFile; fileRef = 25C1BEE31FDFCA3000BC29BE /* BAStreamFileMerger.m */; };
 		E427467620B266C90017331D /* BAFileDownloadThreads.m in Sources */ = {isa = PBXBuildFile; fileRef = E427467520B266C90017331D /* BAFileDownloadThreads.m */; };
+		E448083F20E10E6100C0113C /* BAStreamFileMD5.m in Sources */ = {isa = PBXBuildFile; fileRef = E448083E20E10E6100C0113C /* BAStreamFileMD5.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,8 @@
 		25C1BEE31FDFCA3000BC29BE /* BAStreamFileMerger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAStreamFileMerger.m; sourceTree = "<group>"; };
 		E427467420B266BE0017331D /* BAFileDownloadThreads.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloadThreads.h; sourceTree = "<group>"; };
 		E427467520B266C90017331D /* BAFileDownloadThreads.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloadThreads.m; sourceTree = "<group>"; };
+		E448083D20E10E5800C0113C /* BAStreamFileMD5.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAStreamFileMD5.h; sourceTree = "<group>"; };
+		E448083E20E10E6100C0113C /* BAStreamFileMD5.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAStreamFileMD5.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,6 +190,8 @@
 			children = (
 				25C1BEE21FDFCA2400BC29BE /* BAStreamFileMerger.h */,
 				25C1BEE31FDFCA3000BC29BE /* BAStreamFileMerger.m */,
+				E448083D20E10E5800C0113C /* BAStreamFileMD5.h */,
+				E448083E20E10E6100C0113C /* BAStreamFileMD5.m */,
 				2598C9B51FD1335400B16D77 /* NSString+BAFileDownloaderCategory.h */,
 				2598C9B61FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m */,
 				25B7735E1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.h */,
@@ -334,6 +339,7 @@
 				25946AF11FD7D61C00820BF4 /* BAFileDownloadSession.m in Sources */,
 				2598C9BA1FD13A8A00B16D77 /* BAFileDownloadOperation.m in Sources */,
 				259143A81FD00B7A0061FDF1 /* main.m in Sources */,
+				E448083F20E10E6100C0113C /* BAStreamFileMD5.m in Sources */,
 				259143D41FD00EA70061FDF1 /* BAFileDownloadTask.m in Sources */,
 				2598C9BD1FD13B6D00B16D77 /* BAFileDownloadCache.m in Sources */,
 				25C1BEE41FDFCA3000BC29BE /* BAStreamFileMerger.m in Sources */,
