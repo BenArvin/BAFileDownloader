@@ -14,7 +14,6 @@ typedef NS_ENUM(NSUInteger, BAFileDownloadCacheState) {
     BAFileDownloadCacheStateFull,
 };
 
-
 /**
  non-thread safe
  */
@@ -32,6 +31,7 @@ typedef NS_ENUM(NSUInteger, BAFileDownloadCacheState) {
 - (NSArray *)getFailedSliceRanges;
 - (NSString *)cacheNetResponseTmpSliceData:(NSString *)dataPath sliceRange:(NSRange)sliceRange;
 - (NSError *)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange;
+- (NSError *)mergeAllSlicesData;
 
 - (NSString *)fullDataPath;
 

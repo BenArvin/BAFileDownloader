@@ -12,6 +12,7 @@
 #import "BAStreamFileMerger.h"
 #import "NSError+BAFileDownloaderCategory.h"
 #import "BAStreamFileMD5.h"
+#import <sqlite3.h>
 
 typedef NS_ENUM(NSUInteger, BAFileLocalCacheSliceState) {
     BAFileLocalCacheSliceStateNull = 0,
@@ -30,67 +31,326 @@ static NSString *const BAFileLocalCacheInfoKeySlicesRecord = @"slices_record";
 static NSString *const BAFileLocalCacheInfoKeyFullDataPath = @"full_data_path";
 static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_length";
 
-@interface BAFileDownloadCacheInfo : NSObject
+@interface BAFileDownloadCacheDBTaskInfo: NSObject
 
+@property (nonatomic) NSString *taskKey;
+@property (nonatomic) NSString *md5;
+@property (nonatomic) NSUInteger fullLength;
 @property (nonatomic) BAFileDownloadCacheState state;
-@property (nonatomic) NSString *fileMD5;
-@property (nonatomic) NSMutableDictionary *slicesRecord;//key: range(e.g: 0-100), value: slice data file path
-@property (nonatomic) NSString *fullDataPath;
-@property (nonatomic) NSUInteger fullDataLength;
 
 @end
 
-@implementation BAFileDownloadCacheInfo
+@implementation BAFileDownloadCacheDBTaskInfo
 
 - (instancetype)init
 {
     self = [super init];
     if (self) {
         _state = BAFileDownloadCacheStateNull;
-        _slicesRecord = [[NSMutableDictionary alloc] init];
+        _fullLength = 0;
     }
     return self;
 }
 
-- (instancetype)initWithDictionary:(NSDictionary *)dic
+@end
+
+@interface BAFileDownloadCacheDB: NSObject
+
+@property (nonatomic) sqlite3 *database;
+
++ (BAFileDownloadCacheDB *)sharedDB;
+- (BOOL)isTableExisted:(NSString *)tableName;
+
+@end
+
+@implementation BAFileDownloadCacheDB
+
+- (void)dealloc
 {
-    self = [self init];
-    if (self && dic) {
-        NSArray *allKeys = [dic allKeys];
-        if ([allKeys containsObject:BAFileLocalCacheInfoKeyState]) {
-            _state = ((NSNumber *)[dic objectForKey:BAFileLocalCacheInfoKeyState]).integerValue;
-        }
-        if ([allKeys containsObject:BAFileLocalCacheInfoKeyFileMD5]) {
-            _fileMD5 = (NSString *)[dic objectForKey:BAFileLocalCacheInfoKeyFileMD5];
-        }
-        if ([allKeys containsObject:BAFileLocalCacheInfoKeySlicesRecord]) {
-            _slicesRecord = [NSMutableDictionary dictionaryWithDictionary:[dic objectForKey:BAFileLocalCacheInfoKeySlicesRecord]];
-        }
-        if ([allKeys containsObject:BAFileLocalCacheInfoKeyFullDataPath]) {
-            _fullDataPath = [dic objectForKey:BAFileLocalCacheInfoKeyFullDataPath];
-        }
-        if ([allKeys containsObject:BAFileLocalCacheInfoKeyFullDataLength]) {
-            _fullDataLength = ((NSNumber *)[dic objectForKey:BAFileLocalCacheInfoKeyFullDataLength]).integerValue;
-        }
+    if (self.database) {
+        sqlite3_close(self.database);
+    }
+}
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {
+        [self initalDatabase];
     }
     return self;
 }
 
-- (NSDictionary *)toDictionary
+#pragma mark - public methods
++ (BAFileDownloadCacheDB *)sharedDB
 {
-    NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
-    [result setObject:@(_state) forKey:BAFileLocalCacheInfoKeyState];
-    [result setObject:@(_fullDataLength) forKey:BAFileLocalCacheInfoKeyFullDataLength];
-    if (_fileMD5) {
-        [result setObject:_fileMD5 forKey:BAFileLocalCacheInfoKeyFileMD5];
+    static dispatch_once_t onceToken;
+    static BAFileDownloadCacheDB *_sharedDB;
+    dispatch_once(&onceToken, ^{
+        _sharedDB = [[BAFileDownloadCacheDB alloc] init];
+    });
+    return _sharedDB;
+}
+
+- (NSError *)updateSliceInfo:(NSString *)taskKey sliceKey:(NSString *)sliceKey state:(BAFileLocalCacheSliceState)state
+{
+    if (!taskKey || taskKey.length == 0 || !sliceKey || sliceKey.length == 0) {
+        return [NSError BAFD_simpleErrorWithDescription:@"Update slice info error! Invalid params."];
     }
-    if (_slicesRecord) {
-        [result setObject:_slicesRecord forKey:BAFileLocalCacheInfoKeySlicesRecord];
+    NSString *tableName = [self buildSliceInfoTableName:taskKey];
+    
+    //1. create slice info table if need
+    [self createTaskSliceInfoTable:taskKey];
+    
+    //2. check is row existed
+    BOOL rowExisted = NO;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT * FROM %@ WHERE sliceKey='%@'", tableName, sliceKey] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            rowExisted = YES;
+            break;
+        }
     }
-    if (_fullDataPath) {
-        [result setObject:_fullDataPath forKey:BAFileLocalCacheInfoKeyFullDataPath];
+    sqlite3_finalize(stmt);
+    
+    //3. insert or update row data
+    if (rowExisted) {
+        char *errMsg;
+        if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"UPDATE '%@' SET state=%ld WHERE sliceKey='%@'", tableName, state, sliceKey] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+            return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+        }
+    } else {
+        char *errMsg;
+        if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"INSERT INTO '%@' VALUES('%@', %ld);", tableName, sliceKey, state] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+            return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+        }
     }
+    return nil;
+}
+
+- (NSError *)updateTaskInfo:(NSString *)taskKey md5:(NSString *)md5 fullLength:(NSInteger)fullLength state:(NSInteger)state
+{
+    if (!taskKey || taskKey.length == 0) {
+        return [NSError BAFD_simpleErrorWithDescription:@"Update task info error! Invalid params."];
+    }
+    
+    //1. create slice info table if need
+    [self createTaskSliceInfoTable:taskKey];
+    
+    //2. check is row existed
+    BOOL rowExisted = NO;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT * FROM tasks WHERE taskKey='%@'", taskKey] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            rowExisted = YES;
+        }
+    }
+    sqlite3_finalize(stmt);
+    
+    //3. insert or update row data
+    if (rowExisted) {
+        char *errMsg;
+        if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"UPDATE 'tasks' SET md5='%@', fullLength=%ld, state=%ld WHERE taskKey='%@'", md5, fullLength, state, taskKey] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+            return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+        }
+    } else {
+        char *errMsg;
+        if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"INSERT INTO 'tasks' VALUES('%@', '%@', %ld, %ld);", taskKey, md5, fullLength, state] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+            return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+        }
+    }
+    return nil;
+}
+
+- (NSError *)deleteRow:(NSString *)tableName rowKeyName:(NSString *)rowKeyName rowKeyValue:(NSString *)rowKeyValue
+{
+    if (!tableName || tableName.length == 0
+        || !rowKeyName || rowKeyName.length == 0
+        || !rowKeyValue || rowKeyValue.length == 0) {
+        return [NSError BAFD_simpleErrorWithDescription:@"Delete row data error! Invalid params."];
+    }
+    char *errMsg;
+    if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"DELETE FROM '%@' WHERE %@=%@", tableName, rowKeyName, rowKeyValue] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+        return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+    }
+    return nil;
+}
+
+- (NSError *)deleteSliceInfoTable:(NSString *)taskKey
+{
+    if (!taskKey || taskKey.length == 0) {
+        return [NSError BAFD_simpleErrorWithDescription:@"Delete table error! Invalid params."];
+    }
+    char *errMsg;
+    if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"DROP TABLE %@", [self buildSliceInfoTableName:taskKey]] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+        return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+    }
+    return nil;
+}
+
+- (BAFileDownloadCacheDBTaskInfo *)getTaskInfo:(NSString *)taskKey
+{
+    if (!taskKey || taskKey.length == 0) {
+        return nil;
+    }
+    if (!self.database) {
+        return nil;
+    }
+    BAFileDownloadCacheDBTaskInfo *result = nil;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT * FROM 'tasks' WHERE taskKey='%@'", taskKey] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            if (!result) {
+                result = [[BAFileDownloadCacheDBTaskInfo alloc] init];
+            }
+            const unsigned char *taskKey = sqlite3_column_text(stmt, 0);
+            if (taskKey) {
+                result.taskKey = [NSString stringWithUTF8String:(char *)taskKey];
+            }
+            const unsigned char *md5 = sqlite3_column_text(stmt, 1);
+            if (md5) {
+                result.md5 = [NSString stringWithUTF8String:(char *)md5];
+            }
+            result.fullLength = sqlite3_column_int(stmt, 2);
+            result.state = sqlite3_column_int(stmt, 3);
+            break;
+        }
+    }
+    sqlite3_finalize(stmt);
     return result;
+}
+
+- (NSArray *)getAllSlicesKey:(NSString *)taskKey
+{
+    if (!taskKey || taskKey.length == 0) {
+        return nil;
+    }
+    if (!self.database) {
+        return nil;
+    }
+    NSMutableArray *result = nil;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT sliceKey FROM '%@'", [self buildSliceInfoTableName:taskKey]] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const unsigned char *sliceKeyItem = sqlite3_column_text(stmt, 0);
+            if (sliceKeyItem) {
+                if (!result) {
+                    result = [[NSMutableArray alloc] init];
+                }
+                [result addObject:[NSString stringWithUTF8String:(char *)sliceKeyItem]];
+            }
+        }
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+- (NSArray *)getSlicesKey:(NSString *)taskKey sliceState:(BAFileLocalCacheSliceState)state
+{
+    if (!taskKey || taskKey.length == 0) {
+        return nil;
+    }
+    if (!self.database) {
+        return nil;
+    }
+    NSMutableArray *result = nil;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT sliceKey FROM '%@' WHERE state=%ld", [self buildSliceInfoTableName:taskKey], state] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const unsigned char *sliceKeyItem = sqlite3_column_text(stmt, 0);
+            if (sliceKeyItem) {
+                if (!result) {
+                    result = [[NSMutableArray alloc] init];
+                }
+                [result addObject:[NSString stringWithUTF8String:(char *)sliceKeyItem]];
+            }
+        }
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+- (BAFileLocalCacheSliceState)getSliceState:(NSString *)taskKey sliceKey:(NSString *)sliceKey
+{
+    if (!taskKey || taskKey.length == 0 || !sliceKey || sliceKey.length == 0) {
+        return BAFileLocalCacheSliceStateNull;
+    }
+    if (!self.database) {
+        return BAFileLocalCacheSliceStateNull;
+    }
+    BAFileLocalCacheSliceState result = BAFileLocalCacheSliceStateNull;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT * FROM '%@' WHERE sliceKey='%@'", [self buildSliceInfoTableName:taskKey], sliceKey] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            result = sqlite3_column_int(stmt, 2);
+            break;
+        }
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+#pragma mark - private methods
+- (NSError *)initalDatabase
+{
+    NSError *errorForResult = nil;
+    const char *dbpath = [[NSString stringWithFormat:@"%@/%@database.db", NSHomeDirectory(), BAFileLocalCacheRootPath] UTF8String];
+    if (sqlite3_open(dbpath, &_database) == SQLITE_OK) {
+        char *errMsg;
+        if (sqlite3_exec(self.database, [[NSString stringWithFormat:@"create table if not exists tasks ('taskKey' text primary key, 'md5' text, 'fullLength' integer, 'state' integer default %ld)", BAFileDownloadCacheStateNull] UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+            errorForResult = [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+        }
+    } else {
+        errorForResult = [NSError BAFD_simpleErrorWithDescription:@"Failed to open/create database"];
+    }
+    if (errorForResult && self.database) {
+        sqlite3_close(self.database);
+        self.database = nil;
+    }
+    return errorForResult;
+}
+
+- (NSString *)buildSliceInfoTableName:(NSString *)taskKey
+{
+    if (!taskKey || taskKey.length == 0) {
+        return nil;
+    }
+    return [NSString stringWithFormat:@"sliceInfo_%@", taskKey];
+}
+
+- (BOOL)isTableExisted:(NSString *)tableName
+{
+    if (!tableName || tableName.length == 0) {
+        return NO;
+    }
+    if (!self.database) {
+        return NO;
+    }
+    BOOL result = NO;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(self.database, [[NSString stringWithFormat:@"SELECT * FROM sqlite_master WHERE type='table' AND name='%@'", tableName] UTF8String], -1, &stmt, NULL) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            result = YES;
+        }
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+- (NSError *)createTaskSliceInfoTable:(NSString *)taskKey
+{
+    if (!taskKey || taskKey.length == 0) {
+        return [NSError BAFD_simpleErrorWithDescription:@"Create task slice info table error! Invalid params."];
+    }
+    if (!self.database) {
+        return [NSError BAFD_simpleErrorWithDescription:@"Create task slice info table error! DB invalid!"];
+    }
+    char *errMsg;
+    NSString *sqlCommand = [NSString stringWithFormat:@"create table if not exists %@ ('sliceKey' text primary key, 'state' integer default %ld)", [self buildSliceInfoTableName:taskKey], BAFileLocalCacheSliceStateNull];
+    if (sqlite3_exec(self.database, [sqlCommand UTF8String], NULL, NULL, &errMsg) != SQLITE_OK) {
+        return [NSError BAFD_simpleErrorWithDescription:[NSString stringWithUTF8String:errMsg]];
+    }
+    return nil;
 }
 
 @end
@@ -98,7 +358,6 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 @interface BAFileDownloadCache()
 
 @property (nonatomic) NSString *URL;
-@property (nonatomic) BAFileDownloadCacheInfo *tmpCacheInfo;
 
 @end
 
@@ -122,12 +381,25 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 - (BAFileDownloadCacheState)state
 {
-    return [self cacheInfo].state;
+    BAFileDownloadCacheDB *sharedDB = [BAFileDownloadCacheDB sharedDB];
+    NSString *taskKey = [self.URL BAFD_MD5];
+    BAFileDownloadCacheDBTaskInfo *oldTaskInfo = [sharedDB getTaskInfo:taskKey];
+    BAFileDownloadCacheState result = oldTaskInfo.state;
+    if (oldTaskInfo.state == BAFileDownloadCacheStateFull) {
+        if (![self isPathExist:[self cachedFullDataPath]]) {
+            [sharedDB updateTaskInfo:taskKey md5:nil fullLength:oldTaskInfo.fullLength state:BAFileDownloadCacheStatePart];
+            result = BAFileDownloadCacheStatePart;
+        }
+    }
+    return result;
 }
 
 - (NSError *)updateSlicesSheet:(NSInteger)fullDataLength sliceSize:(NSInteger)sliceSize
 {
-    NSMutableDictionary *newSlicesRecord = [[NSMutableDictionary alloc] init];
+    BAFileDownloadCacheDB *sharedDB = [BAFileDownloadCacheDB sharedDB];
+    NSString *taskKey = [self.URL BAFD_MD5];
+    BAFileDownloadCacheDBTaskInfo *oldInfo = [sharedDB getTaskInfo:taskKey];
+    [sharedDB updateTaskInfo:taskKey md5:oldInfo.md5 fullLength:fullDataLength state:BAFileDownloadCacheStateNull];
     NSInteger sliceCount = ceil((CGFloat)fullDataLength / (CGFloat)sliceSize);
     for (NSInteger i=0; i<sliceCount; i++) {
         NSInteger location = sliceSize * i;
@@ -135,38 +407,30 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
         if (destination > fullDataLength) {
             destination = fullDataLength;
         }
-        [newSlicesRecord setObject:@(BAFileLocalCacheSliceStateNull) forKey:NSStringFromRange(NSMakeRange(location, destination - location))];
+        [[BAFileDownloadCacheDB sharedDB] updateSliceInfo:[self.URL BAFD_MD5] sliceKey:NSStringFromRange(NSMakeRange(location, destination - location)) state:BAFileLocalCacheSliceStateNull];
     }
-    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-    if (!cacheInfo) {
-        cacheInfo = [[BAFileDownloadCacheInfo alloc] init];
-    }
-    cacheInfo.fullDataLength = fullDataLength;
-    cacheInfo.slicesRecord = newSlicesRecord;
-    [self updateCacheInfo:cacheInfo];
     return nil;
 }
 
 - (NSUInteger)getFullDataLength
 {
-    return [self cacheInfo].fullDataLength;
+    BAFileDownloadCacheDBTaskInfo *result = [[BAFileDownloadCacheDB sharedDB] getTaskInfo:[self.URL BAFD_MD5]];
+    return result.fullLength;
 }
 
 - (NSString *)getFullDataMD5
 {
-    return [self cacheInfo].fileMD5;
+    BAFileDownloadCacheDBTaskInfo *result = [[BAFileDownloadCacheDB sharedDB] getTaskInfo:[self.URL BAFD_MD5]];
+    return result.md5;
 }
 
 - (NSUInteger)getCachedSliceLength
 {
+    NSArray *allSlicesKey = [[BAFileDownloadCacheDB sharedDB] getSlicesKey:[self.URL BAFD_MD5] sliceState:BAFileLocalCacheSliceStateSuccessed];
     NSUInteger result = 0;
-    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-    for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
-        BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
-        if (BAFileLocalCacheSliceStateSuccessed == state) {
-            NSRange range = NSRangeFromString(rangeString);
-            result = result + range.length;
-        }
+    for (NSString *rangeString in allSlicesKey) {
+        NSRange range = NSRangeFromString(rangeString);
+        result = result + range.length;
     }
     return result;
 }
@@ -174,32 +438,26 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 - (NSArray *)getUncachedSliceRanges
 {
     NSMutableArray *result = nil;
-    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-    for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
-        BAFileLocalCacheSliceState state = ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue;
-        if (BAFileLocalCacheSliceStateNull == state || BAFileLocalCacheSliceStateError == state) {
-            if (!result) {
-                result = [[NSMutableArray alloc] init];
-            }
-            [result addObject:rangeString];
+    NSArray *errorSlices = [[BAFileDownloadCacheDB sharedDB] getSlicesKey:[self.URL BAFD_MD5] sliceState:BAFileLocalCacheSliceStateError];
+    if (errorSlices) {
+        if (!result) {
+            result = [[NSMutableArray alloc] init];
         }
+        [result addObjectsFromArray:errorSlices];
+    }
+    NSArray *nullSlices = [[BAFileDownloadCacheDB sharedDB] getSlicesKey:[self.URL BAFD_MD5] sliceState:BAFileLocalCacheSliceStateNull];
+    if (nullSlices) {
+        if (!result) {
+            result = [[NSMutableArray alloc] init];
+        }
+        [result addObjectsFromArray:nullSlices];
     }
     return result;
 }
 
 - (NSArray *)getFailedSliceRanges
 {
-    NSMutableArray *result = nil;
-    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-    for (NSString *rangeString in [cacheInfo.slicesRecord allKeys]) {
-        if (BAFileLocalCacheSliceStateError == ((NSNumber *)[cacheInfo.slicesRecord objectForKey:rangeString]).integerValue) {
-            if (!result) {
-                result = [[NSMutableArray alloc] init];
-            }
-            [result addObject:rangeString];
-        }
-    }
-    return result;
+    return [[BAFileDownloadCacheDB sharedDB] getSlicesKey:[self.URL BAFD_MD5] sliceState:BAFileLocalCacheSliceStateError];
 }
 
 - (NSString *)cacheNetResponseTmpSliceData:(NSString *)dataPath sliceRange:(NSRange)sliceRange
@@ -215,48 +473,33 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 
 - (NSError *)saveSliceData:(NSString *)dataPath error:(NSError *)error sliceRange:(NSRange)sliceRange
 {
+    NSString *taskKey = [self.URL BAFD_MD5];
+    BAFileDownloadCacheDB *sharedDB = [BAFileDownloadCacheDB sharedDB];
     NSString *rangeString = NSStringFromRange(sliceRange);
     if (error) {
-        BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-        [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateError) forKey:NSStringFromRange(sliceRange)];
-        [self updateCacheInfo:cacheInfo];
+        [sharedDB updateSliceInfo:taskKey sliceKey:rangeString state:BAFileLocalCacheSliceStateError];
+        BAFileDownloadCacheDBTaskInfo *oldTaskInfo = [sharedDB getTaskInfo:taskKey];
+        [sharedDB updateTaskInfo:taskKey md5:oldTaskInfo.md5 fullLength:oldTaskInfo.fullLength state:BAFileDownloadCacheStatePart];
         return error;
     } else {
         if ([self isPathExist:dataPath]) {
-            //3.copy slice data file from sand box path to given path
+            //1.copy slice data file from sand box path to given path
             NSString *slicePath = [self cachedSliceDataPathWithSliceFlag:rangeString];
             [self moveFileFrom:dataPath to:slicePath overWrite:YES];
-            BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-            [cacheInfo.slicesRecord setObject:@(BAFileLocalCacheSliceStateSuccessed) forKey:rangeString];
+            [sharedDB updateSliceInfo:taskKey sliceKey:rangeString state:BAFileLocalCacheSliceStateSuccessed];
             
-            NSArray *allValues = [cacheInfo.slicesRecord allValues];
-            BAFileDownloadCacheState tmpState = ([allValues containsObject:@(BAFileLocalCacheSliceStateNull)] || [allValues containsObject:@(BAFileLocalCacheSliceStateError)]) ? BAFileDownloadCacheStatePart : BAFileDownloadCacheStateFull;
+            BAFileDownloadCacheState tmpState = BAFileDownloadCacheStatePart;
+            NSArray *errorSlices = [sharedDB getSlicesKey:taskKey sliceState:BAFileLocalCacheSliceStateError];
+            NSArray *nullSlices = [sharedDB getSlicesKey:taskKey sliceState:BAFileLocalCacheSliceStateNull];
+            if ((!errorSlices || errorSlices.count == 0) && (!nullSlices || nullSlices.count == 0)) {
+                tmpState = BAFileDownloadCacheStateFull;
+            }
+            BAFileDownloadCacheDBTaskInfo *oldTaskInfo = [sharedDB getTaskInfo:taskKey];
             if (tmpState == BAFileDownloadCacheStateFull) {
-                //4.merge all slices if all of it saved
-                __block NSError *tmpError = nil;
-                dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-                [self mergeAllSlicesDataWithFinishedBlock:^(NSError *mergeActionError){
-                    tmpError = mergeActionError;
-                    dispatch_semaphore_signal(semaphore);
-                }];
-                dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-                
-                //5.get md5 value
-                if (!tmpError) {
-                    cacheInfo.fileMD5 = [BAStreamFileMD5 md5:[self cachedFullDataPath]];
-                }
-                
-                //6.update cache info
-                if (!tmpError) {
-                    cacheInfo.state = BAFileDownloadCacheStateFull;
-                    [self updateCacheInfo:cacheInfo];
-                    [self removeFilesAtPath:[self slicesPoolPath]];
-                    [self createDirectoryAtPath:[self slicesPoolPath]];
-                }
-                return tmpError;
+                //2.merge all slices if all of it saved
+                return [self mergeAllSlicesData];
             } else {
-                cacheInfo.state = tmpState;
-                [self updateCacheInfo:cacheInfo];
+                [sharedDB updateTaskInfo:taskKey md5:oldTaskInfo.md5 fullLength:oldTaskInfo.fullLength state:tmpState];
                 return nil;
             }
         } else {
@@ -265,9 +508,38 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
     }
 }
 
+- (NSError *)mergeAllSlicesData
+{
+    __block NSError *tmpError = nil;
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    [self mergeAllSlicesDataWithFinishedBlock:^(NSError *mergeActionError){
+        tmpError = mergeActionError;
+        dispatch_semaphore_signal(semaphore);
+    }];
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    
+    //3.get md5 value
+    NSString *taskKey = [self.URL BAFD_MD5];
+    BAFileDownloadCacheDB *sharedDB = [BAFileDownloadCacheDB sharedDB];
+    BAFileDownloadCacheDBTaskInfo *oldTaskInfo = [sharedDB getTaskInfo:taskKey];
+    if (!tmpError) {
+        oldTaskInfo.md5 = [BAStreamFileMD5 md5:[self cachedFullDataPath]];
+    }
+    
+    //4.update cache info
+    if (!tmpError) {
+        oldTaskInfo.state = BAFileDownloadCacheStateFull;
+        [sharedDB updateTaskInfo:taskKey md5:oldTaskInfo.md5 fullLength:oldTaskInfo.fullLength state:oldTaskInfo.state];
+        [sharedDB deleteSliceInfoTable:taskKey];
+        [self removeFilesAtPath:[self slicesPoolPath]];
+        [self createDirectoryAtPath:[self slicesPoolPath]];
+    }
+    return tmpError;
+}
+
 - (NSString *)fullDataPath
 {
-    return [self cacheInfo].state == BAFileDownloadCacheStateFull ? [self cachedFullDataPath] : nil;
+    return [self state] == BAFileDownloadCacheStateFull ? [self cachedFullDataPath] : nil;
 }
 
 - (void)cleanCache
@@ -276,42 +548,6 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 }
 
 #pragma mark - private method
-#pragma mark cache info method
-- (BAFileDownloadCacheInfo *)cacheInfo
-{
-    if (![self.URL BAFD_isValid]) {
-        return nil;
-    }
-    if (self.tmpCacheInfo) {
-        return self.tmpCacheInfo;
-    }
-    NSString *folderPath = [self cacheFolderPath];
-    NSString *cacheInfoPath = [self cacheInfoPath];
-    if ([self isPathExist:cacheInfoPath]) {
-        NSDictionary *dic = [NSDictionary dictionaryWithContentsOfFile:cacheInfoPath];
-        if (dic) {
-            self.tmpCacheInfo = [[BAFileDownloadCacheInfo alloc] initWithDictionary:dic];
-            return self.tmpCacheInfo;
-        } else {
-            [self removeFilesAtPath:folderPath];
-            [self createDirectoryAtPath:folderPath];
-            return nil;
-        }
-    } else {
-        [self createDirectoryAtPath:folderPath];
-        return nil;
-    }
-}
-
-- (void)updateCacheInfo:(BAFileDownloadCacheInfo *)newInfo
-{
-    if (![self.URL BAFD_isValid]) {
-        return;
-    }
-    [[newInfo toDictionary] writeToFile:[self cacheInfoPath] atomically:YES];
-    self.tmpCacheInfo = newInfo;
-}
-
 #pragma mark file method
 - (void)createDirectoryAtPath:(NSString *)path
 {
@@ -426,14 +662,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 #pragma mark slice method
 - (void)mergeAllSlicesDataWithFinishedBlock:(void(^)(NSError *error))finishedBlock
 {
-    BAFileDownloadCacheInfo *cacheInfo = [self cacheInfo];
-    if (!cacheInfo) {
-        if (finishedBlock) {
-            finishedBlock([NSError BAFD_simpleErrorWithDescription:@"cache is null"]);
-        }
-        return;
-    }
-    NSMutableArray *allSlices = cacheInfo.slicesRecord.allKeys.mutableCopy;
+    NSMutableArray *allSlices = [[BAFileDownloadCacheDB sharedDB] getAllSlicesKey:[self.URL BAFD_MD5]].mutableCopy;
     [allSlices sortUsingComparator:^NSComparisonResult(id  _Nonnull obj1, id  _Nonnull obj2) {
         if ([obj1 isKindOfClass:[NSString class]] && [obj2 isKindOfClass:[NSString class]]) {
             NSRange range1 = NSRangeFromString(obj1);

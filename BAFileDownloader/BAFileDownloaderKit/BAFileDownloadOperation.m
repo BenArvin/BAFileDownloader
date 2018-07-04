@@ -181,7 +181,11 @@
     //1.get uncached slices info
     NSArray *sliceRanges = [self.localCache getUncachedSliceRanges];
     if (!sliceRanges || sliceRanges.count == 0) {
-        self.operationError = [NSError BAFD_simpleErrorWithDescription:@"get slice ranges failed!"];
+        if (self.localCache.state == BAFileDownloadCacheStatePart) {
+            self.operationError = [self.localCache mergeAllSlicesData];
+        } else {
+            self.operationError = [NSError BAFD_simpleErrorWithDescription:@"get slice ranges failed!"];
+        }
         [self operationFinished];
         return;
     }
@@ -201,7 +205,11 @@
         __weak typeof(self) weakSelf1 = self;
         [[BAFileDownloadSession sharedSession] startDownloadTask:request progressHandler:^(NSUInteger finished, NSUInteger totalFinished, NSUInteger totalExpected) {
             __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
-            [strongSelf1 updateProgress:finished totalFinished:totalFinished totalExpected:totalExpected];
+            __weak typeof(strongSelf1) weakSelf2 = strongSelf1;
+            [[BAFileDownloadThreads actionQueue] addOperationWithBlock:^() {
+                __strong typeof(weakSelf2) strongSelf2 = weakSelf2;
+                [strongSelf2 updateProgress:finished totalFinished:totalFinished totalExpected:totalExpected];
+            }];
         } completionHandler:^(NSURL *location, NSError *error) {
             __strong typeof(weakSelf1) strongSelf1 = weakSelf1;
             //6.copy tmp file from NSURLSession tmp files path to sand box synchronized, in case tmp file removed
