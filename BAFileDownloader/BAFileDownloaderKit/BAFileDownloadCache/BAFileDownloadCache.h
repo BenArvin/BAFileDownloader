@@ -7,12 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
-
-typedef NS_ENUM(NSUInteger, BAFileDownloadCacheState) {
-    BAFileDownloadCacheStateNull = 0,
-    BAFileDownloadCacheStatePart,
-    BAFileDownloadCacheStateFull,
-};
+#import "BAFileDownloadCacheDefines.h"
 
 /**
  non-thread safe

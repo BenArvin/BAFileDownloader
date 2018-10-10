@@ -25,6 +25,7 @@
 		25C1BEE41FDFCA3000BC29BE /* BAStreamFileMerger.m in Sources */ = {isa = PBXBuildFile; fileRef = 25C1BEE31FDFCA3000BC29BE /* BAStreamFileMerger.m */; };
 		E427467620B266C90017331D /* BAFileDownloadThreads.m in Sources */ = {isa = PBXBuildFile; fileRef = E427467520B266C90017331D /* BAFileDownloadThreads.m */; };
 		E448083F20E10E6100C0113C /* BAStreamFileMD5.m in Sources */ = {isa = PBXBuildFile; fileRef = E448083E20E10E6100C0113C /* BAStreamFileMD5.m */; };
+		E4F36D7D20ECDCF400323F53 /* BAFileDownloadCacheDB.m in Sources */ = {isa = PBXBuildFile; fileRef = E4F36D7C20ECDCF400323F53 /* BAFileDownloadCacheDB.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +83,9 @@
 		E427467520B266C90017331D /* BAFileDownloadThreads.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloadThreads.m; sourceTree = "<group>"; };
 		E448083D20E10E5800C0113C /* BAStreamFileMD5.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAStreamFileMD5.h; sourceTree = "<group>"; };
 		E448083E20E10E6100C0113C /* BAStreamFileMD5.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAStreamFileMD5.m; sourceTree = "<group>"; };
+		E4F36D7B20ECDCEB00323F53 /* BAFileDownloadCacheDB.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloadCacheDB.h; sourceTree = "<group>"; };
+		E4F36D7C20ECDCF400323F53 /* BAFileDownloadCacheDB.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BAFileDownloadCacheDB.m; sourceTree = "<group>"; };
+		E4F36D7F20ECDD4800323F53 /* BAFileDownloadCacheDefines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BAFileDownloadCacheDefines.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,12 +178,11 @@
 				259143D01FD00C720061FDF1 /* BAFileDownloader.m */,
 				2598C9B81FD13A8000B16D77 /* BAFileDownloadOperation.h */,
 				2598C9B91FD13A8A00B16D77 /* BAFileDownloadOperation.m */,
-				2598C9BB1FD13B6300B16D77 /* BAFileDownloadCache.h */,
-				2598C9BC1FD13B6D00B16D77 /* BAFileDownloadCache.m */,
 				25946AEF1FD7D61300820BF4 /* BAFileDownloadSession.h */,
 				25946AF01FD7D61C00820BF4 /* BAFileDownloadSession.m */,
 				E427467420B266BE0017331D /* BAFileDownloadThreads.h */,
 				E427467520B266C90017331D /* BAFileDownloadThreads.m */,
+				E4F36D7E20ECDD0E00323F53 /* BAFileDownloadCache */,
 				25C1BEE61FDFCA9B00BC29BE /* BAKit */,
 			);
 			path = BAFileDownloaderKit;
@@ -198,6 +201,18 @@
 				25B7735F1FDA3B1F002F8CA6 /* NSError+BAFileDownloaderCategory.m */,
 			);
 			path = BAKit;
+			sourceTree = "<group>";
+		};
+		E4F36D7E20ECDD0E00323F53 /* BAFileDownloadCache */ = {
+			isa = PBXGroup;
+			children = (
+				E4F36D7F20ECDD4800323F53 /* BAFileDownloadCacheDefines.h */,
+				2598C9BB1FD13B6300B16D77 /* BAFileDownloadCache.h */,
+				2598C9BC1FD13B6D00B16D77 /* BAFileDownloadCache.m */,
+				E4F36D7B20ECDCEB00323F53 /* BAFileDownloadCacheDB.h */,
+				E4F36D7C20ECDCF400323F53 /* BAFileDownloadCacheDB.m */,
+			);
+			path = BAFileDownloadCache;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -334,6 +349,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2591439D1FD00B7A0061FDF1 /* ViewController.m in Sources */,
+				E4F36D7D20ECDCF400323F53 /* BAFileDownloadCacheDB.m in Sources */,
 				E427467620B266C90017331D /* BAFileDownloadThreads.m in Sources */,
 				2598C9B71FD1335400B16D77 /* NSString+BAFileDownloaderCategory.m in Sources */,
 				25946AF11FD7D61C00820BF4 /* BAFileDownloadSession.m in Sources */,

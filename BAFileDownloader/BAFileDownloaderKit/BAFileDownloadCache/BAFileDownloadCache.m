@@ -37,6 +37,8 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
 @property (nonatomic) NSString *md5;
 @property (nonatomic) NSUInteger fullLength;
 @property (nonatomic) BAFileDownloadCacheState state;
+@property (nonatomic) CGFloat startTime;
+@property (nonatomic) CGFloat recentlyUsedTime;
 
 @end
 
@@ -128,6 +130,16 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
     return nil;
 }
 
+- (NSError *)updateTaskStartTime
+{
+    return nil;
+}
+
+- (NSError *)updateTaskRecentlyUsedTime
+{
+    return nil;
+}
+
 - (NSError *)updateTaskInfo:(NSString *)taskKey md5:(NSString *)md5 fullLength:(NSInteger)fullLength state:(NSInteger)state
 {
     if (!taskKey || taskKey.length == 0) {
@@ -213,6 +225,8 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
             }
             result.fullLength = sqlite3_column_int(stmt, 2);
             result.state = sqlite3_column_int(stmt, 3);
+            result.startTime = sqlite3_column_double(stmt, 4);
+            result.recentlyUsedTime = sqlite3_column_double(stmt, 5);
             break;
         }
     }
@@ -399,7 +413,7 @@ static NSString *const BAFileLocalCacheInfoKeyFullDataLength = @"full_data_lengt
     BAFileDownloadCacheDB *sharedDB = [BAFileDownloadCacheDB sharedDB];
     NSString *taskKey = [self.URL BAFD_MD5];
     BAFileDownloadCacheDBTaskInfo *oldInfo = [sharedDB getTaskInfo:taskKey];
-    [sharedDB updateTaskInfo:taskKey md5:oldInfo.md5 fullLength:fullDataLength state:BAFileDownloadCacheStateNull];
+    [sharedDB updateTaskInfo:taskKey md5:oldInfo.md5 fullLength:fullDataLength state:BAFileDownloadCacheStatePart];
     NSInteger sliceCount = ceil((CGFloat)fullDataLength / (CGFloat)sliceSize);
     for (NSInteger i=0; i<sliceCount; i++) {
         NSInteger location = sliceSize * i;
